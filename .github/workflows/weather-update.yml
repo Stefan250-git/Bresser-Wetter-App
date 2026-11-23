@@ -1,0 +1,45 @@
+
+name: BRESSER Wetterdaten archivieren
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bresser-wetterdaten
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Weathercloud installieren
+        run: pip install weathercloud==0.1.5
+
+      - name: Wetterdaten abrufen
+        env:
+          WEATHERCLOUD_STATION: '1073176104'
+        run: python scripts/collect.py
+
+      - name: Messwerte speichern
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if ! git diff --cached --quiet; then
+            git commit -m "Wetterdaten automatisch aktualisiert"
+            git push
+          fi
