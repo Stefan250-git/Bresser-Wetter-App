@@ -1,0 +1,1 @@
+{"name":"BRESSER Wetter zuhause","short_name":"Wetter zuhause","description":"Eigene Wetterstation und 3-Tage-Ausblick","lang":"de","start_url":"./","scope":"./","display":"standalone","background_color":"#f0f4f7","theme_color":"#102440","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
