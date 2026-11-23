@@ -22,7 +22,59 @@ function formatUpdated(timestamp){const dt=new Date(timestamp);if(Number.isNaN(d
 async function loadRelevant(force=false){const weekDay=(new Date(chosenDay+'T12:00:00Z').getUTCDay()+6)%7;const weekStart=addDay(chosenDay,-weekDay);let months=new Set([yearMonth(chosenDay),yearMonth(addDay(chosenDay,1)),yearMonth(weekStart),yearMonth(chosenDay.replace(/^\d{4}/,String(+chosenDay.slice(0,4)-1)))]);await Promise.all([...months].map(m=>loadMonth(m,force)));try{live=await fetchJson('data/latest.json')}catch(e){live=null}if(!live&&!Object.values(archive).some(x=>x.length))$('status').textContent='Keine Messdaten archiviert · Messwertsammler noch nicht eingerichtet';else $('status').textContent=live?.timestamp?'Zuletzt aktualisiert: '+formatUpdated(live.timestamp):'Archivdaten geladen · kein aktueller Zeitstempel';}
 function records(month){return archive[month]||[]}
 function recordsForDay(day){return records(yearMonth(day)).filter(r=>r.timestamp&&new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(r.timestamp))===day)}
-function nearest(day,time){const d=time==='24:00'?addDay(day,1):day,t=time==='24:00'?'00:00':time;const target=Date.parse(`${d}T${t}:00Z`);const before=new Date(target-7200000),after=new Date(target+7200000);const candidate=[...recordsForDay(day),...recordsForDay(addDay(day,1))].filter(r=>{const x=Date.parse(r.timestamp);return x>=before.getTime()&&x<=after.getTime()});let best=null,delta=Infinity;for(const r of candidate){const dt=new Date(r.timestamp);const parts=new Intl.DateTimeFormat('en-GB',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(dt);const p=Object.fromEntries(parts.map(x=>[x.type,x.value]));if(p.year+'-'+p.month+'-'+p.day!==d)continue;const mins=Number(p.hour)*60+Number(p.minute),targetM=Number(t.slice(0,2))*60+Number(t.slice(3));const dist=Math.abs(mins-targetM);if(dist<delta){delta=dist;best=r}}return delta<=20?best:null}
+
+function nearest(day, time) {
+  const targetMinutes = time === '24:00'
+    ? 1440
+    : Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+
+  const nextDay = addDay(day, 1);
+
+  const candidates = [
+    ...recordsForDay(day),
+    ...recordsForDay(nextDay)
+  ];
+
+  let best = null;
+  let smallestDifference = Infinity;
+
+  for (const record of candidates) {
+    const date = new Date(record.timestamp);
+    if (Number.isNaN(date.getTime())) continue;
+
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23'
+    }).formatToParts(date);
+
+    const p = Object.fromEntries(
+      parts.map(item => [item.type, item.value])
+    );
+
+    const localDay = `${p.year}-${p.month}-${p.day}`;
+
+    if (localDay !== day && localDay !== nextDay) continue;
+
+    const minutes =
+      Number(p.hour) * 60 +
+      Number(p.minute) +
+      (localDay === nextDay ? 1440 : 0);
+
+    const difference = Math.abs(minutes - targetMinutes);
+
+    if (difference < smallestDifference) {
+      smallestDifference = difference;
+      best = record;
+    }
+  }
+
+  return smallestDifference <= 20 ? best : null;
+}
 function latestForDay(day,limit){return recordsForDay(day).filter(r=>!limit||r.timestamp<=limit).sort((a,b)=>a.timestamp.localeCompare(b.timestamp)).at(-1)||null}
 function periodRain(day,kind,limit){if(kind==='day')return latestForDay(day,limit)?.rain_day??null;if(kind==='month')return latestForDay(day,limit)?.rain_month??null;const dow=(new Date(day+'T12:00:00Z').getUTCDay()+6)%7;const days=range(addDay(day,-dow),day);let total=0;for(const d of days){const arr=recordsForDay(d);if(!arr.length)return null;const val=d===day?latestForDay(d,limit):arr.sort((a,b)=>a.timestamp.localeCompare(b.timestamp)).at(-1);if(!Number.isFinite(val?.rain_day))return null;total+=val.rain_day;}return total}
 const direction=deg=>{if(!Number.isFinite(deg))return '—';return ['N','NO','O','SO','S','SW','W','NW'][Math.round(deg/45)%8]};
