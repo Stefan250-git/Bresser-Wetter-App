@@ -1,11 +1,11 @@
 
-const CACHE = 'bresser-v29';
+const CACHE = 'bresser-v30';
 
 const STATIC = [
   './',
   './index.html',
-  './styles.css?v=29',
-  './app.js?v=29',
+  './styles.css?v=30',
+  './app.js?v=30',
   './icon.svg',
   './assets/moon-full-nasa.jpg',
   './assets/rhine-levels.jpg',
