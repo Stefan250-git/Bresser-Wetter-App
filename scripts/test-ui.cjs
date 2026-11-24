@@ -410,7 +410,7 @@ async function tests() {
   assert.equal(lunar.nodes.get('moon-day-today').textContent,'Heute');
   assert.equal(lunar.nodes.get('moon-day-next1').textContent,'25.11.');
   assert.equal(lunar.nodes.get('moon-day-next2').textContent,'26.11.');
-  assert.equal(lunar.nodes.get('moon-next-full').textContent,'Nächster Vollmond: 24.11.2026');
+  assert.equal(lunar.nodes.get('moon-next-full').textContent,'Nächster Vollmond: Heute');
   const fullMoons=['2026-01-03T10:03:00Z','2026-02-01T22:09:00Z','2026-03-03T11:38:00Z','2026-04-02T02:12:00Z','2026-05-01T17:23:00Z','2026-05-31T08:45:00Z','2026-06-29T23:56:00Z','2026-07-29T14:36:00Z','2026-08-28T04:18:00Z','2026-09-26T16:49:00Z','2026-10-26T04:12:00Z','2026-11-24T14:53:00Z','2026-12-24T01:28:00Z','2027-01-22T12:17:00Z'];
   for(const reference of fullMoons) {
     const expected=Date.parse(reference);lunar.context.before=expected-2*86400000;
@@ -421,6 +421,8 @@ async function tests() {
   assert.equal(lunar.nodes.get('moon-next-full').textContent,'Nächster Vollmond: 24.12.2026','After the event, advance to the following full moon');
   lunar.run("renderMoon(new Date('2026-06-28T12:00:00Z'))");
   assert.equal(lunar.nodes.get('moon-next-full').textContent,'Nächster Vollmond: 30.06.2026','Full-moon date uses Berlin time, not UTC');
+  lunar.run("renderMoon(new Date('2026-06-30T00:30:00+02:00'))");
+  assert.equal(lunar.nodes.get('moon-next-full').textContent,'Nächster Vollmond: Heute','Today is determined in Berlin even when the UTC date differs');
   for(const [date,labels] of [
     ['2026-03-30T00:30:00+02:00',['28.03.','29.03.','Heute','31.03.','01.04.']],
     ['2026-10-26T00:30:00+01:00',['24.10.','25.10.','Heute','27.10.','28.10.']],

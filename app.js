@@ -429,7 +429,7 @@ function renderMoon(date=new Date()) {
   $('moon-phase').textContent=name;$('moon-illumination').textContent=fmt(Math.round(moon.fraction*100),0)+' %';
   $('moon-trend').textContent=moon.fraction<=.005||moon.fraction>=.995?'':moon.phase<.5?'Zunehmend':'Abnehmend';
   const next=nextFullMoon(date);
-  $('moon-next-full').textContent='N\u00e4chster Vollmond: '+(next?selectedDateFormatter.format(next):'nicht verf\u00fcgbar');
+  $('moon-next-full').textContent='N\u00e4chster Vollmond: '+(next?(dayFormatter.format(next)===dayFormatter.format(date)?'Heute':selectedDateFormatter.format(next)):'nicht verf\u00fcgbar');
   $('moon-time').textContent='Stand: '+readingFormatter.format(date);
 }
 
