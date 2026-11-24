@@ -96,11 +96,13 @@ function renderWind(wind) {
   const calm = Number.isFinite(wind?.wind_speed) && wind.wind_speed >= 0 && wind.wind_speed < 1;
   const hasDirection = !calm && Number.isFinite(wind?.wind_direction);
   const degrees = hasDirection ? (wind.wind_direction % 360 + 360) % 360 : 0;
+  // Weathercloud reports the origin; the arrow points toward the destination.
+  const travelDegrees = (degrees + 180) % 360;
   const names = ['Norden','Nordosten','Osten','S\u00fcdosten','S\u00fcden','S\u00fcdwesten','Westen','Nordwesten'];
   const origin = hasDirection ? 'Wind aus '+names[Math.round(degrees/45)%8]+' ('+direction(degrees)+') \u00b7 '+Math.round(degrees)%360+'\u00b0' : calm ? 'Windstill \u00b7 keine Windrichtung' : 'Windrichtung nicht verf\u00fcgbar';
   $('direction').textContent = origin;
-  $('wind-compass').setAttribute('aria-label', origin);
-  $('wind-compass-pointer').setAttribute('transform', 'rotate('+degrees+' 90 90)');
+  $('wind-compass').setAttribute('aria-label', hasDirection ? origin+'. Wind weht nach '+names[Math.round(travelDegrees/45)%8] : origin);
+  $('wind-compass-pointer').setAttribute('transform', 'rotate('+travelDegrees+' 90 90)');
   $('wind-compass-pointer').setAttribute('opacity', hasDirection ? '1' : '0');
   $('wind-time').textContent=wind?.timestamp?'Messung: '+new Date(wind.timestamp).toLocaleString('de-DE',{timeZone:TZ,timeStyle:'short'}):'Keine aktuelle Windmessung';
 }
