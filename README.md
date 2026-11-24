@@ -70,6 +70,8 @@ Abruf beim Start, beim manuellen Aktualisieren, bei Rückkehr zur App und alle z
 
 Die drei fotorealistischen Darstellungen sind KI-generierte Symbolbilder, keine aktuellen Aufnahmen. [Bild und Generierungs-Prompt](assets/README.md#rheinpegel-symbolbilder).
 
+Der Trend vergleicht den aktuellen Wasserstand mit der PEGELONLINE-Messung von einer Stunde zuvor: Pfeil und Steigend/Fallend/Gleichbleibend sowie die Änderung in Zentimetern. Der Vergleich orientiert sich am Zeitstempel des aktuellen Messwerts, auch über Tages- und Zeitumstellungsgrenzen hinweg. Fehlt der Vergleichswert (maximal zwei Minuten Zeitabweichung), erscheint „Trend nicht verfügbar“. Ein Ausfall der historischen Daten blendet den aktuellen Wasserstand nicht aus.
+
 ## Weitere Quellen
 - https://weathercloud.net/de/faq (kein offizieller Abruf-API, 10-Minuten-Intervall)
 - https://github.com/MauroDruwel/Weathercloud (inoffizieller Python-Client)

@@ -130,7 +130,17 @@ $('refresh').onclick = async () => {
 async function fetchJson(path){const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);return await r.json()}
 const RIVER_UUID='f33c3cc9-dc4b-4b77-baa9-5a5f10704398';
 const RIVER_URL='https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/'+RIVER_UUID+'.json?includeTimeseries=true&includeCurrentMeasurement=true';
-let riverReading=null,riverFailed=false,riverPending=null,riverFetchedAt=0;
+let riverReading=null,riverFailed=false,riverPending=null,riverFetchedAt=0,riverTrend=null;
+function calculateRiverTrend(reading,measurements) {
+  if(!reading || !Number.isFinite(reading.value) || !Array.isArray(measurements))return null;
+  const target=Date.parse(reading.timestamp)-60*60*1000;
+  if(!Number.isFinite(target))return null;
+  // Require a reading at the one-hour mark (allowing two minutes of timestamp jitter).
+  const candidates=measurements.filter(item=>Number.isFinite(item?.value) &&
+    typeof item?.timestamp==='string' && Math.abs(Date.parse(item.timestamp)-target)<=2*60*1000);
+  candidates.sort((a,b)=>Math.abs(Date.parse(a.timestamp)-target)-Math.abs(Date.parse(b.timestamp)-target));
+  return candidates.length?Math.round((reading.value-candidates[0].value)*10)/10:null;
+}
 function normalizeRiver(data) {
   const series=data?.timeseries?.find(series=>series.shortname==='W');
   const reading=series?.currentMeasurement;
@@ -156,6 +166,10 @@ function renderRiver() {
   $('river-panel').dataset.level=status.key;
   $('river-value').textContent=fmt(riverReading?.value,0);
   $('river-state').textContent=status.label;
+  const trend=riverTrend!==null && status.key!=='unknown'?riverTrend:null;
+  $('river-trend').textContent=trend===null?'Trend nicht verfügbar':
+    (trend>0?'↗ Steigend':trend<0?'↘ Fallend':'→ Gleichbleibend')+' · '+
+    (trend>0?'+':'')+fmt(trend,Number.isInteger(trend)?0:1)+' cm in 1 Stunde';
   for(const key of ['low','normal','high']) {
     $('river-'+key).dataset.current=String(status.key===key);
     $('river-'+key).setAttribute('aria-label',({low:'Niedrig',normal:'Normal',high:'Hoch'})[key]+(status.key===key?' – aktueller Zustand':''));
@@ -177,6 +191,16 @@ function loadRiver(force=false) {
       const response=await fetch(RIVER_URL,{cache:'no-store',signal:controller.signal});
       if(!response.ok)throw Error('HTTP '+response.status);
       riverReading=normalizeRiver(await response.json());riverFailed=false;riverFetchedAt=Date.now();
+      riverTrend=null;
+      // A missing history must not hide an otherwise valid current water level.
+      try {
+        const target=Date.parse(riverReading.timestamp)-60*60*1000;
+        const historyURL=new URL('https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/'+RIVER_UUID+'/W/measurements.json');
+        historyURL.searchParams.set('start',new Date(target-2*60*1000).toISOString());
+        historyURL.searchParams.set('end',new Date(target+2*60*1000).toISOString());
+        const history=await fetch(historyURL.href,{cache:'no-store',signal:controller.signal});
+        if(history.ok)riverTrend=calculateRiverTrend(riverReading,await history.json());
+      } catch { riverTrend=null; }
     } catch { riverFailed=true; }
     finally { clearTimeout(timeout);renderRiver();$('river-panel').setAttribute('aria-busy','false'); }
   })().finally(()=>{riverPending=null;});

@@ -471,12 +471,33 @@ async function tests() {
     assert.equal(river.run('riverStatus(normalizeRiver(gauge)).key'),'unknown','Stale or future values have no active classification');
   }
   gauge.timeseries[0].currentMeasurement.timestamp='2026-11-24T11:00:00+01:00';
+  river.context.history=[{timestamp:'2026-11-24T10:00:00+01:00',value:402}];
+  assert.equal(river.run('calculateRiverTrend(normalizeRiver(gauge),history)'),3);
+  for(const [baseline,expected,label] of [[402,3,'Steigend'],[408,-3,'Fallend'],[405,0,'Gleichbleibend']]) {
+    river.context.history[0].value=baseline;
+    river.run('riverReading=normalizeRiver(gauge);riverTrend=calculateRiverTrend(riverReading,history);renderRiver()');
+    assert.equal(river.run('riverTrend'),expected);
+    assert(river.nodes.get('river-trend').textContent.includes(label));
+  }
+  for(const history of [[],null,[{value:null,timestamp:'2026-11-24T10:00:00+01:00'}],[{value:400,timestamp:'2026-11-24T09:45:00+01:00'}],[{value:400,timestamp:'invalid'}]]) {
+    river.context.history=history;
+    assert.equal(river.run('calculateRiverTrend(normalizeRiver(gauge),history)'),null,'Incomplete history never implies a steady trend');
+  }
   let resolveRiver,riverCalls=0;
-  river.context.fetch=()=>{riverCalls++;return new Promise(resolve=>{resolveRiver=resolve;});};
+  river.context.fetch=(url)=>{
+    if(url.includes('/W/measurements.json')) {
+      const query=new URL(url).searchParams;
+      assert.equal(query.get('start'),'2026-11-24T08:58:00.000Z');
+      assert.equal(query.get('end'),'2026-11-24T09:02:00.000Z');
+      return Promise.resolve({ok:true,json:async()=>[{value:402,timestamp:'2026-11-24T10:00:00+01:00'}]});
+    }
+    riverCalls++;return new Promise(resolve=>{resolveRiver=resolve;});
+  };
   const pendingRiver=river.run('loadRiver()');
   assert.equal(river.run('loadRiver(true)'),pendingRiver,'Concurrent requests share one fetch');
   resolveRiver({ok:true,json:async()=>gauge});await pendingRiver;
   assert.equal(river.nodes.get('river-normal').dataset.current,'true');
+  assert.equal(river.nodes.get('river-trend').textContent,'↗ Steigend · +3 cm in 1 Stunde');
   assert(river.nodes.get('river-time').textContent.includes('11:00'),'Measurement time uses Berlin timezone');
   await river.run('loadRiver()');assert.equal(riverCalls,1,'Resume does not refetch immediately');
   river.context.fetch=async()=>{throw Error('offline');};
@@ -484,6 +505,14 @@ async function tests() {
   assert.equal(river.nodes.get('river-value').textContent,'405','Failed refresh preserves last known reading');
   assert.equal(river.nodes.get('river-normal').dataset.current,'false','Failed refresh cannot claim a current classification');
   assert(river.nodes.get('river-time').textContent.startsWith('Letzter bekannter'));
+  assert.equal(river.nodes.get('river-trend').textContent,'Trend nicht verfügbar','A failed refresh hides a previous trend');
+  river.context.fetch=async url=>{
+    if(url.includes('/W/measurements.json'))throw Error('history unavailable');
+    return {ok:true,json:async()=>gauge};
+  };
+  await river.run('loadRiver(true)');
+  assert.equal(river.nodes.get('river-normal').dataset.current,'true','Unavailable history does not discard a valid water level');
+  assert.equal(river.nodes.get('river-trend').textContent,'Trend nicht verfügbar');
   river.context.fetch=(url,options)=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(Error('timeout'))));
   const timeoutRiver=river.run('loadRiver(true)');river.advance(10000);await timeoutRiver;
   assert.equal(river.nodes.get('river-panel').attributes['aria-busy'],'false','Timed-out requests release the loading state');
