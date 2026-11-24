@@ -423,7 +423,7 @@ function renderMoon(date=new Date()) {
     $(offset===0?'moon-lit':'moon-lit-'+key).setAttribute('d',moonDiscPath(illumination.fraction,waxing));
     const graphic=$(offset===0?'moon-graphic':'moon-graphic-'+key);
     graphic.setAttribute('aria-label',selectedDateFormatter.format(sample)+': '+name+', '+percent+' Prozent beleuchtet');
-    graphic.setAttribute('title',readingFormatter.format(sample)+' \u00b7 schematische Ansicht f\u00fcr die Nordhalbkugel');
+    graphic.setAttribute('title',readingFormatter.format(sample)+' \u00b7 berechnete Mondphase \u00b7 NASA-Bild \u00b7 Nordhalbkugel');
   }
   const name=moonPhaseName(moon.fraction,moon.phase<.5);
   $('moon-phase').textContent=name;$('moon-illumination').textContent=fmt(Math.round(moon.fraction*100),0)+' %';
