@@ -106,7 +106,7 @@ $('hour-ruler').onpointerdown=$('hour').onpointerdown;
 $('hour-ruler').oncontextmenu=$('hour').oncontextmenu;
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){endHourPress();stopCompassSway();}
-  else { renderCurrentWeather();forecast(); }
+  else { renderMoon();renderCurrentWeather();forecast(); }
 });
 $('hour').oninput = event => {
   if (hourPress) { updateHourControl();return; }
@@ -335,6 +335,56 @@ function renderCurrentWeather() {
   $('current-weather-label').textContent=state.label;
 }
 
+// Lunar illumination adapted from SunCalc 1.9.0, (c) Vladimir Agafonkin.
+// BSD-2-Clause notice: third-party/SunCalc-LICENSE.txt. No network dependency.
+function moonIllumination(date=new Date()) {
+  const days=date.valueOf()/86400000-.5+2440588-2451545;
+  if(!Number.isFinite(days))return null;
+  const rad=Math.PI/180,tilt=23.4397*rad;
+  const coordinates=(longitude,latitude)=>({
+    ra:Math.atan2(Math.sin(longitude)*Math.cos(tilt)-Math.tan(latitude)*Math.sin(tilt),Math.cos(longitude)),
+    dec:Math.asin(Math.sin(latitude)*Math.cos(tilt)+Math.cos(latitude)*Math.sin(tilt)*Math.sin(longitude))
+  });
+  const anomaly=rad*(357.5291+.98560028*days);
+  const sunLongitude=anomaly+rad*(1.9148*Math.sin(anomaly)+.02*Math.sin(2*anomaly)+.0003*Math.sin(3*anomaly)+102.9372)+Math.PI;
+  const moonAnomaly=rad*(134.963+13.064993*days);
+  const moonLongitude=rad*(218.316+13.176396*days+6.289*Math.sin(moonAnomaly));
+  const moonLatitude=rad*5.128*Math.sin(rad*(93.272+13.229350*days));
+  const sun=coordinates(sunLongitude,0),moon=coordinates(moonLongitude,moonLatitude);
+  const separation=Math.acos(Math.max(-1,Math.min(1,Math.sin(sun.dec)*Math.sin(moon.dec)+Math.cos(sun.dec)*Math.cos(moon.dec)*Math.cos(sun.ra-moon.ra))));
+  const incidence=Math.atan2(149598000*Math.sin(separation),385001-20905*Math.cos(moonAnomaly)-149598000*Math.cos(separation));
+  const angle=Math.atan2(Math.cos(sun.dec)*Math.sin(sun.ra-moon.ra),Math.sin(sun.dec)*Math.cos(moon.dec)-Math.cos(sun.dec)*Math.sin(moon.dec)*Math.cos(sun.ra-moon.ra));
+  return {fraction:Math.max(0,Math.min(1,(1+Math.cos(incidence))/2)),phase:.5+.5*incidence*(angle<0?-1:1)/Math.PI};
+}
+function moonPhaseName(fraction,waxing) {
+  if(fraction<=.005)return 'Neumond';
+  if(fraction>=.995)return 'Vollmond';
+  if(Math.abs(fraction-.5)<=.035)return waxing?'Erstes Viertel':'Letztes Viertel';
+  if(fraction<.5)return waxing?'Zunehmende Sichel':'Abnehmende Sichel';
+  return waxing?'Zunehmender Mond':'Abnehmender Mond';
+}
+function moonDiscPath(fraction,waxing) {
+  if(!Number.isFinite(fraction) || fraction<=0)return '';
+  const light=Math.min(1,fraction),radius=58,terminator=Math.abs(1-2*light)*radius;
+  const outer=waxing?1:0,inner=light<.5?1-outer:outer;
+  return 'M80 22 A58 58 0 0 '+outer+' 80 138 '+(terminator<.000001?'L80 22':'A'+terminator.toFixed(3)+' 58 0 0 '+inner+' 80 22')+' Z';
+}
+function renderMoon(date=new Date()) {
+  const moon=moonIllumination(date);
+  if(!moon) {
+    $('moon-phase').textContent='Mondphase nicht verf\u00fcgbar';$('moon-illumination').textContent='\u2014';
+    $('moon-trend').textContent='';$('moon-time').textContent='Ger\u00e4tezeit nicht verf\u00fcgbar';
+    $('moon-lit').setAttribute('d','');$('moon-graphic').setAttribute('aria-label','Mondphase nicht verf\u00fcgbar');return;
+  }
+  const waxing=moon.phase<.5,name=moonPhaseName(moon.fraction,waxing),percent=fmt(Math.round(moon.fraction*100),0);
+  $('moon-phase').textContent=name;$('moon-illumination').textContent=percent+' %';
+  $('moon-trend').textContent=moon.fraction<=.005||moon.fraction>=.995?'':waxing?'Zunehmend':'Abnehmend';
+  $('moon-lit').setAttribute('d',moonDiscPath(moon.fraction,waxing));
+  $('moon-graphic').setAttribute('aria-label',name+', '+percent+' Prozent beleuchtet');
+  $('moon-graphic').setAttribute('title','Astronomisch berechnet \u00b7 schematische Ansicht f\u00fcr die Nordhalbkugel');
+  $('moon-time').textContent='Stand: '+readingFormatter.format(date);
+}
+
 // Fixed Celsius scale shared by both speedometers; numeric values remain exact.
 function setGaugeReading(id,value,negativeOffset) {
   const text=fmt(value).replace(',', '.');
@@ -363,6 +413,7 @@ const priorDay=(+chosenDay.slice(0,4)-1)+chosenDay.slice(4),prev=latestForDay(pr
 $('compare').textContent=Number.isFinite(curr)&&Number.isFinite(old)?`Vorjahr bis ${priorDay.slice(5).replace('-','.')}.: ${fmt(old)} mm · ${fmt(curr-old)} mm (${old>0?fmt((curr-old)/old*100,0)+' %':'Prozentvergleich nicht möglich'})`:'Vorjahr: Keine vergleichbaren Stationsdaten';
 }
 function renderCurrent(){
+  renderMoon();
   renderCurrentWeather();
   $('current-temp').textContent = fmt(live?.temperature).replace(',', '.');
   updateTemperatureGauge('current', live?.temperature,live?.feels);
@@ -386,7 +437,7 @@ function forecast(){
 }
 async function loadForecast(){try{const url=new URL('https://api.open-meteo.com/v1/forecast');Object.entries({latitude:LAT,longitude:LON,timezone:TZ,forecast_days:4,wind_speed_unit:'kmh',current:'weather_code,is_day,wind_speed_10m,wind_gusts_10m',daily:'temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max'}).forEach(([k,v])=>url.searchParams.set(k,v));const x=await fetchJson(url);currentWeather=normalizeCurrentWeather(x);renderCurrentWeather();const d=x.daily,days=[1,2,3].map(i=>({date:d.time[i],min:d.temperature_2m_min[i],max:d.temperature_2m_max[i],rain:d.precipitation_sum[i],p:d.precipitation_probability_max[i],gust:d.wind_gusts_10m_max[i]}));if(days.some(x=>!x.date))throw Error('Unvollständige Prognose');const start=(d.temperature_2m_max[0]+d.temperature_2m_min[0])/2,end=(days[2].max+days[2].min)/2,diff=end-start;const trend=Math.abs(diff)<2?'Die Temperaturen bleiben ungefähr gleich.':diff>0?'Die Temperaturen werden voraussichtlich steigen.':'Die Temperaturen werden voraussichtlich sinken.';const rain=days.filter(x=>(x.rain??0)>=0.5||(x.p??0)>=60);const windy=days.filter(x=>(x.gust??0)>=50);const entries=[['Temperatur',trend],['Niederschlag',rain.length?`Niederschlag an ${rain.map(x=>new Date(x.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'short'})).join(', ')} erwartet.`:'Derzeit kein nennenswerter Niederschlag prognostiziert.'],['Wind / Sturm',windy.length?`Erhöhte Windböen möglich (bis ${fmt(Math.max(...windy.map(x=>x.gust)),0)} km/h).`:'Derzeit keine stärkeren Windböen prognostiziert.']];$('forecast').replaceChildren();for(const [name,description]of entries){let n=document.createElement('div');n.className='forecast-item';let b=document.createElement('strong');b.textContent=name;let p=document.createElement('p');p.textContent=description;n.append(b,p);$('forecast').append(n)}}catch(e){renderCurrentWeather();$('forecast').textContent='Prognose derzeit nicht verfügbar.'}}
 setupCompassObserver();
-if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});updateHourControl();loadRelevant().then(render);forecast();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});updateHourControl();renderMoon();loadRelevant().then(render);forecast();
 
 // Keep the current-weather icon fresh without polling while the app is hidden.
-setInterval(()=>{if(!document.hidden)forecast();},10*60*1000);
+setInterval(()=>{if(!document.hidden){renderMoon();forecast();}},10*60*1000);

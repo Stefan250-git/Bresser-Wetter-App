@@ -378,6 +378,39 @@ async function tests() {
   assert.equal(currentRequest.nodes.get('current-weather').dataset.weather,'snow');
   assert.equal(currentRequest.nodes.get('forecast').children.length,3);
 
+  // USNO primary phases (UTC): aa.usno.navy.mil/calculated/moon/phases
+  const lunar=harness();
+  for(const [date,fraction,phase] of [
+    ['2026-11-09T07:02:00Z',0,0],
+    ['2026-11-17T11:48:00Z',.5,.25],
+    ['2026-11-24T14:53:00Z',1,.5],
+    ['2026-12-01T06:08:00Z',.5,.75]
+  ]) {
+    lunar.context.date=date;
+    const illumination=lunar.run('moonIllumination(new Date(date))');
+    assert(Math.abs(illumination.fraction-fraction)<.035,'Illumination agrees with known primary phase: '+date);
+    const difference=Math.abs(illumination.phase-phase);
+    assert(Math.min(difference,1-difference)<.02,'Cycle direction agrees with known phase');
+  }
+  assert.equal(lunar.run('moonPhaseName(0,true)'),'Neumond');
+  assert.equal(lunar.run('moonPhaseName(.5,true)'),'Erstes Viertel');
+  assert.equal(lunar.run('moonPhaseName(1,true)'),'Vollmond');
+  assert.equal(lunar.run('moonPhaseName(.5,false)'),'Letztes Viertel');
+  assert.equal(lunar.run('moonPhaseName(.2,true)'),'Zunehmende Sichel');
+  assert.equal(lunar.run('moonPhaseName(.2,false)'),'Abnehmende Sichel');
+  assert.equal(lunar.run('moonDiscPath(0,true)'),'');
+  assert(lunar.run('moonDiscPath(.5,true)').includes('A58 58 0 0 1 80 138 L80 22'));
+  assert(lunar.run('moonDiscPath(.5,false)').includes('A58 58 0 0 0 80 138 L80 22'));
+  lunar.run("chosenDay='2026-11-01';renderMoon()");
+  assert.equal(lunar.nodes.get('moon-phase').textContent,'Vollmond','Moon is current even when an archive date is selected');
+  assert(lunar.nodes.get('moon-time').textContent.includes('24.11.26'));
+  assert.equal(lunar.stats.requests.length,0,'Moon works offline without a network call');
+  lunar.run("renderMoon(new Date('invalid'))");
+  assert.equal(lunar.nodes.get('moon-illumination').textContent,'\u2014');
+  assert.equal(lunar.nodes.get('moon-lit').attributes.d,'');
+  assert(html.indexOf('id="moon-title"')>html.indexOf('id="wind-time"'));
+  assert(html.indexOf('id="moon-title"')<html.indexOf('>Ausblick'));
+
   const listeners={},deleted=[];
   const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');
   const version=sw.match(/const CACHE = '([^']+)'/)[1];
@@ -392,7 +425,7 @@ async function tests() {
     const asset=html.match(new RegExp(name.replace('.','\\.')+'\\?v=\\d+'))[0];
     assert(sw.includes(asset),'Service worker and HTML asset versions match');
   }
-  console.log('PASS: negative-value centering, measured/feels-like readings, scroll compass animation/reduced motion, two-second slider, navigation, archive lookup, offline refresh, request races, wind, weather states, shared forecast request and service worker.');
+  console.log('PASS: current moon against USNO phases, moon orientation/offline/archive independence, gauge readings, compass animation, two-second slider, navigation, archive lookup, offline refresh, wind, weather states, shared forecast and service worker.');
 }
 
 function benchmark(code) {

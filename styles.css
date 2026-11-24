@@ -81,3 +81,7 @@
 
 .hour-slider:focus-visible~.hour-thumb-value{box-shadow:inset 0 0 0 3px #438dc6;border-radius:50%}.hour-control[data-press-state="holding"] .hour-thumb-value{box-shadow:inset 0 0 0 3px #d49b38}
 .gauge-reading{font-variant-numeric:tabular-nums}.compass-sway{transform-origin:90px 90px;transform-box:view-box}
+
+.moon-overview{display:flex;align-items:center;justify-content:space-between;gap:16px}.moon-details{flex:1;min-width:0}.moon-phase-name{font-size:1.125rem;font-weight:750;line-height:1.35}.moon-illumination{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;margin:10px 0}.moon-illumination strong{font-size:1.75rem;line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap}.moon-illumination span,.moon-trend{font-size:.8125rem;color:#60748b}.moon-graphic{flex:0 0 auto;width:clamp(108px,36vw,160px);max-width:46%}.moon-panel #moon-time{margin-top:10px;line-height:1.5}@media(prefers-color-scheme:dark){.moon-illumination span,.moon-trend{color:#abbdd0}}
+
+.moon-panel .section-title{margin:0 0 14px}

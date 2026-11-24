@@ -46,6 +46,12 @@ Beide Tachos trennen gemessene und gefühlte Temperatur. Die Einheit steht mitti
 
 Beim Hereinscrollen schwingt die Kompassnadel viermal minimal mit abnehmendem Ausschlag um ihre korrekte Zielrichtung. Es gibt keine Dauerschleife und keinen Neustart bei jedem Messwertabruf. Bei reduzierter Bewegung, fehlender Windrichtung oder ausgeblendeter App wird nicht animiert. Fokus und Haltehervorhebung des Stundenreglers bleiben auf den Griff begrenzt und überdecken die Skala nicht.
 
+## Aktuelle Mondanzeige
+
+Unter Wind zeigt die App die aktuelle Mondphase, den beleuchteten Anteil und eine schematische Ansicht für die Nordhalbkugel. Die astronomische Näherungsrechnung ist aus SunCalc 1.9.0 adaptiert; die [Lizenz](third-party/SunCalc-LICENSE.txt) liegt bei. Die Anzeige ist unabhängig von der gewählten Archivzeit und funktioniert ohne Netzwerk. Sie wird beim Öffnen, Aktualisieren und regelmäßig bei sichtbarer App erneuert. Sie trifft keine Aussage darüber, ob der Mond gerade über dem Horizont steht.
+
+Die Tests vergleichen die Berechnung mit den [USNO-Referenzphasen für November/Dezember 2026](https://aa.usno.navy.mil/calculated/moon/phases?date=2026-11-01&format=p&nump=8).
+
 ## Bedienlogik prüfen
 
 `node scripts/test-ui.cjs` prüft ohne zusätzliche Pakete den Stundenregler, Datumsnavigation, Messwertzuordnung, Offline-Aktualisierung, Windanzeige, Prognose und Service-Worker-Versionen. Der Test verwendet eine simulierte Oberfläche; die visuelle Darstellung und Touchbedienung müssen zusätzlich im Browser bzw. auf dem Smartphone geprüft werden.
