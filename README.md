@@ -40,6 +40,12 @@ Das Symbol in der aktuellen Temperaturkarte verwendet frische Stationsdaten für
 
 Aktuelles Wetter und Ausblick nutzen eine gemeinsame Anfrage, werden bei manueller Aktualisierung sowie alle zehn Minuten bei sichtbarer App erneuert. Animationen beachten die Systemeinstellung für reduzierte Bewegung.
 
+## Temperaturgrafiken und Bewegungen
+
+Beide Tachos trennen gemessene und gefühlte Temperatur. Die Einheit steht mittig oberhalb der Werte. Negative Messwerte erhalten eine leichte optische Verschiebung nach links; fehlende gefühlte Temperaturen bleiben als Gedankenstrich erkennbar.
+
+Beim Hereinscrollen schwingt die Kompassnadel viermal minimal mit abnehmendem Ausschlag um ihre korrekte Zielrichtung. Es gibt keine Dauerschleife und keinen Neustart bei jedem Messwertabruf. Bei reduzierter Bewegung, fehlender Windrichtung oder ausgeblendeter App wird nicht animiert. Fokus und Haltehervorhebung des Stundenreglers bleiben auf den Griff begrenzt und überdecken die Skala nicht.
+
 ## Bedienlogik prüfen
 
 `node scripts/test-ui.cjs` prüft ohne zusätzliche Pakete den Stundenregler, Datumsnavigation, Messwertzuordnung, Offline-Aktualisierung, Windanzeige, Prognose und Service-Worker-Versionen. Der Test verwendet eine simulierte Oberfläche; die visuelle Darstellung und Touchbedienung müssen zusätzlich im Browser bzw. auf dem Smartphone geprüft werden.

@@ -105,7 +105,7 @@ $('hour').oncontextmenu=event=>event.preventDefault();
 $('hour-ruler').onpointerdown=$('hour').onpointerdown;
 $('hour-ruler').oncontextmenu=$('hour').oncontextmenu;
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden)endHourPress();
+  if(document.hidden){endHourPress();stopCompassSway();}
   else { renderCurrentWeather();forecast(); }
 });
 $('hour').oninput = event => {
@@ -229,6 +229,36 @@ function windStrength(speed) {
   const level = index < 0 ? 5 : index;
   return {level, label:['Bft 0-3','Bft 4-5','Bft 6-7','Bft 8-9','Bft 10-11','Bft 12'][level]};
 }
+let compassVisible=false,compassAnimation=null;
+function stopCompassSway() {
+  if(compassAnimation)compassAnimation.cancel();
+  compassAnimation=null;
+}
+function animateCompassNeedle() {
+  if($('wind-compass').dataset.directionKnown!=='true')return;
+  if(typeof matchMedia==='function' && matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const needle=$('wind-compass-sway');
+  if(typeof needle.animate!=='function')return;
+  stopCompassSway();
+  const angles=[0,-3,3,-2.4,2.4,-1.6,1.6,-.8,.8,0];
+  const animation=needle.animate(angles.map(angle=>({transform:'rotate('+angle+'deg)',easing:'ease-in-out'})),{duration:1800,easing:'linear',iterations:1});
+  compassAnimation=animation;
+  animation.onfinish=()=>{if(compassAnimation===animation)compassAnimation=null;};
+}
+function setupCompassObserver() {
+  if(typeof IntersectionObserver!=='function')return null;
+  const observer=new IntersectionObserver(entries=>{
+    for(const entry of entries) {
+      if(entry.isIntersecting && entry.intersectionRatio>=.45) {
+        if(!compassVisible){compassVisible=true;animateCompassNeedle();}
+      } else if(!entry.isIntersecting || entry.intersectionRatio<=.1) {
+        compassVisible=false;stopCompassSway();
+      }
+    }
+  },{threshold:[0,.1,.45]});
+  observer.observe($('wind-compass'));
+  return observer;
+}
 function renderWind(wind) {
   const strength = windStrength(wind?.wind_speed);
   $('wind').textContent = strength ? fmt(wind.wind_speed) : '\u2014';
@@ -236,6 +266,8 @@ function renderWind(wind) {
   for (let i=0;i<6;i++) $('windsock-'+i).dataset.active = String(strength?.level === i);
   const calm = Number.isFinite(wind?.wind_speed) && wind.wind_speed >= 0 && wind.wind_speed < 1;
   const hasDirection = !calm && Number.isFinite(wind?.wind_direction);
+  const hadDirection=$('wind-compass').dataset.directionKnown==='true';
+  $('wind-compass').dataset.directionKnown=String(hasDirection);
   const degrees = hasDirection ? (wind.wind_direction % 360 + 360) % 360 : 0;
   // Weathercloud reports the origin; the arrow points toward the destination.
   const travelDegrees = (degrees + 180) % 360;
@@ -245,6 +277,8 @@ function renderWind(wind) {
   $('wind-compass').setAttribute('aria-label', hasDirection ? origin+'. Wind weht nach '+names[Math.round(travelDegrees/45)%8] : origin);
   $('wind-compass-pointer').setAttribute('transform', 'rotate('+travelDegrees+' 90 90)');
   $('wind-compass-pointer').setAttribute('opacity', hasDirection ? '1' : '0');
+  if(!hasDirection)stopCompassSway();
+  else if(compassVisible && !hadDirection)animateCompassNeedle();
   $('wind-time').textContent=wind?.timestamp?'Messung: '+new Date(wind.timestamp).toLocaleString('de-DE',{timeZone:TZ,timeStyle:'short'}):'Keine aktuelle Windmessung';
 }
 
@@ -302,7 +336,12 @@ function renderCurrentWeather() {
 }
 
 // Fixed Celsius scale shared by both speedometers; numeric values remain exact.
-function updateTemperatureGauge(kind, value) {
+function setGaugeReading(id,value,negativeOffset) {
+  const text=fmt(value).replace(',', '.');
+  $(id).textContent=text;
+  $(id).setAttribute('x',String(text.startsWith('-')?160-negativeOffset:160));
+}
+function updateTemperatureGauge(kind, value,feels) {
   const gauge = $(kind+'-gauge');
   const available = Number.isFinite(value);
   const fraction = available ? Math.max(0, Math.min(1, (value + 20) / 60)) : 0;
@@ -310,21 +349,23 @@ function updateTemperatureGauge(kind, value) {
   const needle = $(kind+'-needle');
   needle.setAttribute('transform', 'rotate('+fraction*270+' 160 160)');
   needle.setAttribute('opacity', available ? '1' : '0');
-  gauge.nextElementSibling.textContent = available ? fmt(value)+' \u00b0C' : 'Keine Temperaturmessung vorhanden';
+  setGaugeReading(kind==='current'?'current-temp':'temp',value,8);
+  setGaugeReading(kind==='current'?'current-feels':'feels',feels,4);
+  gauge.nextElementSibling.textContent = 'Gemessene Temperatur: '+(available?fmt(value)+' \u00b0C':'keine Messung')+'. Gef\u00fchlte Temperatur: '+(Number.isFinite(feels)?fmt(feels)+' \u00b0C':'nicht verf\u00fcgbar');
 }
 
 function renderSelection(){
 const time=hourTime(chosenHour),r=nearest(chosenDay,time),until=r?.timestamp;
 $('selected-time').textContent = selectedDateFormatter.format(new Date(chosenDay+'T12:00:00Z')) + ' · ' + hourLabel(chosenHour);
-updateTemperatureGauge('selected', r?.temperature);
-$('selected-hint').textContent=r?'Messwert am gewählten Zeitpunkt (±20 Minuten)':'Keine Stationsmessung zu dieser Uhrzeit (±20 Minuten).';$('temp').textContent=fmt(r?.temperature).replace(',', '.');$('feels').textContent=fmt(r?.feels);$('reading-time').textContent=r?'Gemessen: '+readingFormatter.format(new Date(r.timestamp)):'Keine Messung vorhanden';$('rainrate').textContent=fmt(r?.rain_rate);$('rainday').textContent=fmt(periodRain(chosenDay,'day',until));$('rainweek').textContent=fmt(periodRain(chosenDay,'week',until));$('rainmonth').textContent=fmt(periodRain(chosenDay,'month',until));
+updateTemperatureGauge('selected', r?.temperature,r?.feels);
+$('selected-hint').textContent=r?'Messwert am gewählten Zeitpunkt (±20 Minuten)':'Keine Stationsmessung zu dieser Uhrzeit (±20 Minuten).';$('reading-time').textContent=r?'Gemessen: '+readingFormatter.format(new Date(r.timestamp)):'Keine Messung vorhanden';$('rainrate').textContent=fmt(r?.rain_rate);$('rainday').textContent=fmt(periodRain(chosenDay,'day',until));$('rainweek').textContent=fmt(periodRain(chosenDay,'week',until));$('rainmonth').textContent=fmt(periodRain(chosenDay,'month',until));
 const priorDay=(+chosenDay.slice(0,4)-1)+chosenDay.slice(4),prev=latestForDay(priorDay,until?priorDay+'T23:59:59Z':null);const curr=periodRain(chosenDay,'month',until),old=prev?.rain_month;
 $('compare').textContent=Number.isFinite(curr)&&Number.isFinite(old)?`Vorjahr bis ${priorDay.slice(5).replace('-','.')}.: ${fmt(old)} mm · ${fmt(curr-old)} mm (${old>0?fmt((curr-old)/old*100,0)+' %':'Prozentvergleich nicht möglich'})`:'Vorjahr: Keine vergleichbaren Stationsdaten';
 }
 function renderCurrent(){
   renderCurrentWeather();
   $('current-temp').textContent = fmt(live?.temperature).replace(',', '.');
-  updateTemperatureGauge('current', live?.temperature);
+  updateTemperatureGauge('current', live?.temperature,live?.feels);
 
   $('current-time').textContent = live?.timestamp
     ? 'Messpunkt: ' + formatUpdated(live.timestamp) + ' Uhr'
@@ -344,6 +385,7 @@ function forecast(){
   return forecastPending;
 }
 async function loadForecast(){try{const url=new URL('https://api.open-meteo.com/v1/forecast');Object.entries({latitude:LAT,longitude:LON,timezone:TZ,forecast_days:4,wind_speed_unit:'kmh',current:'weather_code,is_day,wind_speed_10m,wind_gusts_10m',daily:'temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max'}).forEach(([k,v])=>url.searchParams.set(k,v));const x=await fetchJson(url);currentWeather=normalizeCurrentWeather(x);renderCurrentWeather();const d=x.daily,days=[1,2,3].map(i=>({date:d.time[i],min:d.temperature_2m_min[i],max:d.temperature_2m_max[i],rain:d.precipitation_sum[i],p:d.precipitation_probability_max[i],gust:d.wind_gusts_10m_max[i]}));if(days.some(x=>!x.date))throw Error('Unvollständige Prognose');const start=(d.temperature_2m_max[0]+d.temperature_2m_min[0])/2,end=(days[2].max+days[2].min)/2,diff=end-start;const trend=Math.abs(diff)<2?'Die Temperaturen bleiben ungefähr gleich.':diff>0?'Die Temperaturen werden voraussichtlich steigen.':'Die Temperaturen werden voraussichtlich sinken.';const rain=days.filter(x=>(x.rain??0)>=0.5||(x.p??0)>=60);const windy=days.filter(x=>(x.gust??0)>=50);const entries=[['Temperatur',trend],['Niederschlag',rain.length?`Niederschlag an ${rain.map(x=>new Date(x.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'short'})).join(', ')} erwartet.`:'Derzeit kein nennenswerter Niederschlag prognostiziert.'],['Wind / Sturm',windy.length?`Erhöhte Windböen möglich (bis ${fmt(Math.max(...windy.map(x=>x.gust)),0)} km/h).`:'Derzeit keine stärkeren Windböen prognostiziert.']];$('forecast').replaceChildren();for(const [name,description]of entries){let n=document.createElement('div');n.className='forecast-item';let b=document.createElement('strong');b.textContent=name;let p=document.createElement('p');p.textContent=description;n.append(b,p);$('forecast').append(n)}}catch(e){renderCurrentWeather();$('forecast').textContent='Prognose derzeit nicht verfügbar.'}}
+setupCompassObserver();
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});updateHourControl();loadRelevant().then(render);forecast();
 
 // Keep the current-weather icon fresh without polling while the app is hidden.

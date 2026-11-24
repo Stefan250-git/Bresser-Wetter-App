@@ -14,7 +14,7 @@ function harness(code = source) {
   let frameId = 0;
   let timerId=0,clock=0;
   const timers=new Map(),documentListeners={};
-  const frames = new Map(), stats = { formatters: 0, formats: 0, requests: [] };
+  const frames = new Map(), stats = { formatters: 0, formats: 0, requests: [], animations: [] };
   const nodes = new Map(ids.map(id => [id, {
     value: '', disabled: false, writes: 0, text: '', dataset: {}, attributes: {}, captures:new Set(),
     style: { setProperty(key, value) { this[key] = value; } },
@@ -28,6 +28,10 @@ function harness(code = source) {
     setPointerCapture(id) { this.captures.add(id); },
     hasPointerCapture(id) { return this.captures.has(id); },
     releasePointerCapture(id) { this.captures.delete(id); },
+    animate(keyframes,options) {
+      const animation={id,keyframes,options,cancelled:false,cancel(){this.cancelled=true;}};
+      stats.animations.push(animation);return animation;
+    },
     set textContent(value) { this.writes++; this.text = value; },
     get textContent() { return this.text; }
   }]));
@@ -50,6 +54,7 @@ function harness(code = source) {
     cancelAnimationFrame(id) { frames.delete(id); },
     setTimeout(callback,delay) { timers.set(++timerId,{at:clock+delay,callback});return timerId; },
     clearTimeout(id) { timers.delete(id); },
+    matchMedia() { return {matches:false}; },
     fetch: async url => {
       stats.requests.push(url);
       return { ok: true, json: async () => String(url).includes('latest') ? null : [] };
@@ -260,6 +265,44 @@ async function tests() {
     for (let i=0; i<6; i++) assert.equal(h.nodes.get('windsock-'+i).dataset.active, String(i === level));
   }
   assert.equal(h.nodes.get('wind-compass-pointer').attributes.transform, 'rotate(0 90 90)');
+  for(const kind of ['current','selected']) {
+    const valueId=kind==='current'?'current-temp':'temp',feltId=kind==='current'?'current-feels':'feels';
+    h.context.kind=kind;
+    for(const [value,feels,x,feltX] of [[-1.4,-3.2,'152','156'],[12.3,10.1,'160','160'],[-0,-0,'152','156'],[null,null,'160','160']]) {
+      h.context.value=value;h.context.feels=feels;
+      h.run('updateTemperatureGauge(kind,value,feels)');
+      assert.equal(h.nodes.get(valueId).attributes.x,x,'Optical centering including minus sign');
+      assert.equal(h.nodes.get(feltId).attributes.x,feltX);
+      assert.equal(h.nodes.get(valueId).textContent,Number.isFinite(value)?new Intl.NumberFormat('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1}).format(value).replace(',','.'):'\u2014');
+      assert.equal(h.nodes.get(feltId).textContent,Number.isFinite(feels)?new Intl.NumberFormat('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1}).format(feels).replace(',','.'):'\u2014');
+    }
+  }
+  const sway=harness(),observers=[];
+  sway.context.IntersectionObserver=class {
+    constructor(callback,options){this.callback=callback;this.options=options;observers.push(this);}
+    observe(target){this.target=target;}
+  };
+  seed(sway);sway.run('setupCompassObserver()');
+  const observer=observers[0];assert.equal(observer.target,sway.nodes.get('wind-compass'));
+  const enter=()=>observer.callback([{isIntersecting:true,intersectionRatio:.6}]);
+  const leave=()=>observer.callback([{isIntersecting:false,intersectionRatio:0}]);
+  enter();assert.equal(sway.stats.animations.length,1);
+  const firstSway=sway.stats.animations[0];
+  assert.equal(firstSway.id,'wind-compass-sway');assert.equal(firstSway.options.duration,1800);assert.equal(firstSway.options.iterations,1);
+  assert.equal(firstSway.keyframes.filter(frame=>/rotate\(-/.test(frame.transform)).length,4);
+  assert.equal(firstSway.keyframes.at(-1).transform,'rotate(0deg)');
+  assert.equal(sway.nodes.get('wind-compass-pointer').attributes.transform,'rotate(0 90 90)');
+  enter();observer.callback([{isIntersecting:true,intersectionRatio:.2}]);enter();
+  assert.equal(sway.stats.animations.length,1,'No replay or jitter while compass remains visible');
+  sway.run('renderWind({wind_speed:20,wind_direction:270})');
+  assert.equal(sway.nodes.get('wind-compass-pointer').attributes.transform,'rotate(90 90 90)');
+  assert.equal(sway.stats.animations.length,1,'Weather updates do not restart the scroll animation');
+  leave();assert(firstSway.cancelled);enter();assert.equal(sway.stats.animations.length,2);
+  sway.context.matchMedia=()=>({matches:true});leave();enter();assert.equal(sway.stats.animations.length,2,'Reduced motion disables compass sway');
+  sway.context.matchMedia=()=>({matches:false});leave();sway.run('renderWind(null)');enter();
+  assert.equal(sway.stats.animations.length,2,'No animation without a valid wind direction');
+  sway.run('renderWind({wind_speed:20,wind_direction:90})');assert.equal(sway.stats.animations.length,3);
+  sway.context.document.hidden=true;sway.documentListeners.visibilitychange();assert(sway.stats.animations.at(-1).cancelled);
   for(const [value,angle] of [[-30,0],[-20,0],[10,135],[40,270],[50,270]]) {
     h.context.value=value;h.run("updateTemperatureGauge('selected',value)");
     assert.equal(h.nodes.get('selected-needle').attributes.transform,'rotate('+angle+' 160 160)');
@@ -349,7 +392,7 @@ async function tests() {
     const asset=html.match(new RegExp(name.replace('.','\\.')+'\\?v=\\d+'))[0];
     assert(sw.includes(asset),'Service worker and HTML asset versions match');
   }
-  console.log('PASS: two-second hold, slider, navigation, archive lookup, offline refresh, request races, wind, current-weather states/day/night/freshness, shared forecast request and service worker.');
+  console.log('PASS: negative-value centering, measured/feels-like readings, scroll compass animation/reduced motion, two-second slider, navigation, archive lookup, offline refresh, request races, wind, weather states, shared forecast request and service worker.');
 }
 
 function benchmark(code) {

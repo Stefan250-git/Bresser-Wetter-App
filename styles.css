@@ -30,13 +30,13 @@
 .hour-picker{margin-top:18px}
 .hour-control{position:relative;height:80px}
 .hour-slider{display:block;width:100%;min-width:0;height:80px;margin:0;padding:0;cursor:pointer;appearance:none;-webkit-appearance:none;background:transparent}
-.hour-slider:focus-visible{outline:3px solid #438dc6;outline-offset:3px;border-radius:8px}
+.hour-slider:focus,.hour-slider:focus-visible{outline:none}
 .hour-slider::-webkit-slider-runnable-track{height:16px;background:#c3d4e2;border-radius:20px}
 .hour-slider::-webkit-slider-thumb{box-sizing:border-box;appearance:none;-webkit-appearance:none;width:56px;height:56px;margin-top:-20px;border:4px solid #fff;border-radius:50%;background:#234665;box-shadow:0 2px 8px #12294540}
 .hour-slider::-moz-range-track{height:16px;background:#c3d4e2;border-radius:20px}
 .hour-slider::-moz-range-thumb{box-sizing:border-box;width:56px;height:56px;border:4px solid #fff;border-radius:50%;background:#234665;box-shadow:0 2px 8px #12294540}
 .hour-thumb-value{position:absolute;left:calc(var(--hour-position,50%) + var(--hour-offset,0px));top:50%;transform:translate(-50%,-50%);width:56px;height:56px;display:flex;align-items:center;justify-content:center;pointer-events:none;color:#fff;font-size:26px;font-weight:750;font-variant-numeric:tabular-nums;line-height:1;user-select:none}
-.hour-ruler{position:relative;height:28px;margin:0 28px;font-size:.875rem;font-weight:600;color:#60748b;font-variant-numeric:tabular-nums}
+.hour-ruler{position:relative;height:28px;margin:10px 28px 0;font-size:.875rem;font-weight:600;color:#60748b;font-variant-numeric:tabular-nums}
 .hour-ruler span{position:absolute;transform:translateX(-50%);white-space:nowrap}
 .hour-ruler span::before{content:"";position:absolute;left:50%;top:-8px;width:2px;height:6px;background:currentColor}
 @media(prefers-color-scheme:dark){.hour-ruler{color:#abbdd0}.hour-thumb-value{color:#122945}.hour-slider::-webkit-slider-runnable-track{background:#446079}.hour-slider::-webkit-slider-thumb{background:#a5cee9;border-color:#192b3e}.hour-slider::-moz-range-track{background:#446079}.hour-slider::-moz-range-thumb{background:#a5cee9;border-color:#192b3e}}
@@ -50,7 +50,7 @@
 
 .hour-preview{position:absolute;z-index:3;transform:translateX(-50%);left:clamp(52px,calc(var(--hour-position,50%) + var(--hour-offset,0px)),calc(100% - 52px));bottom:calc(50% + 48px);box-sizing:border-box;width:104px;padding:8px 12px;border:1px solid #365c7c;border-radius:16px;background:#193956;color:#fff;text-align:center;font-size:56px;font-weight:750;line-height:1.1;font-variant-numeric:tabular-nums;box-shadow:0 5px 18px #12294530;pointer-events:none;visibility:hidden;user-select:none}
 .hour-control[data-press-state="dragging"] .hour-preview{visibility:visible}
-.hour-control[data-press-state="holding"] .hour-thumb-value{outline:3px solid #d49b38;outline-offset:3px;border-radius:50%}
+.hour-control[data-press-state="holding"] .hour-thumb-value{box-shadow:inset 0 0 0 3px #d49b38;border-radius:50%}
 
 .hour-slider{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 @media(prefers-color-scheme:dark){.hour-preview{background:#d9eaf7;color:#122945;border-color:#a5cee9}}
@@ -78,3 +78,6 @@
 @keyframes weather-flash{0%,65%,100%{opacity:1}72%,84%{opacity:.45}}
 @media(prefers-color-scheme:dark){.weather-caption{color:#abbdd0}}
 @media(prefers-reduced-motion:reduce){.weather-rain,.weather-snow,.weather-wind,.weather-lightning{animation:none}}
+
+.hour-slider:focus-visible~.hour-thumb-value{box-shadow:inset 0 0 0 3px #438dc6;border-radius:50%}.hour-control[data-press-state="holding"] .hour-thumb-value{box-shadow:inset 0 0 0 3px #d49b38}
+.gauge-reading{font-variant-numeric:tabular-nums}.compass-sway{transform-origin:90px 90px;transform-box:view-box}
