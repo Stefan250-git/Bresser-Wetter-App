@@ -8,11 +8,11 @@ const yearMonth=s=>s.slice(0,7),range=(a,b)=>{const out=[];for(let d=a;d<=b;d=ad
 let chosenDay=dateBerlin(),chosenHour=12,archive={},loaded=new Set(),live=null;
 $('date').value=chosenDay;$('date').max=dateBerlin();
 const hourTime = hour => String(hour).padStart(2,'0')+':00';
-const hourLabel = hour => hour === 24 ? '00:00 Uhr (Tagesende)' : hourTime(hour)+' Uhr';
+const hourLabel = hour => hour === 24 ? '24:00 Uhr (Tagesende)' : hourTime(hour)+' Uhr';
 function updateHourControl() {
   $('hour').value = String(chosenHour);
   $('hour').setAttribute('aria-valuetext', hourLabel(chosenHour));
-  $('hour-value').textContent = hourLabel(chosenHour);
+  $('hour-value').textContent = hourTime(chosenHour)+' Uhr';
 }
 function selectHour(value) {
   const hour = Number(value);
