@@ -12,15 +12,22 @@ assert.equal(new Set(ids).size, ids.length, 'Unique HTML IDs');
 
 function harness(code = source) {
   let frameId = 0;
+  let timerId=0,clock=0;
+  const timers=new Map(),documentListeners={};
   const frames = new Map(), stats = { formatters: 0, formats: 0, requests: [] };
   const nodes = new Map(ids.map(id => [id, {
-    value: '', disabled: false, writes: 0, text: '', dataset: {}, attributes: {},
+    value: '', disabled: false, writes: 0, text: '', dataset: {}, attributes: {}, captures:new Set(),
     style: { setProperty(key, value) { this[key] = value; } },
     nextElementSibling: {}, children: [],
     replaceChildren() { this.children=[]; },
     append(...children) { this.children.push(...children); },
     appendChild(child) { this.children.push(child); },
     setAttribute(key, value) { this.attributes[key] = value; },
+    getBoundingClientRect() { return {left:0,top:0,width:296,height:80}; },
+    focus() {},
+    setPointerCapture(id) { this.captures.add(id); },
+    hasPointerCapture(id) { return this.captures.has(id); },
+    releasePointerCapture(id) { this.captures.delete(id); },
     set textContent(value) { this.writes++; this.text = value; },
     get textContent() { return this.text; }
   }]));
@@ -41,18 +48,23 @@ function harness(code = source) {
     Intl: instrumentedIntl, Date: TestDate, Number, Math, Set, Map, WeakMap, URL,
     requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
     cancelAnimationFrame(id) { frames.delete(id); },
+    setTimeout(callback,delay) { timers.set(++timerId,{at:clock+delay,callback});return timerId; },
+    clearTimeout(id) { timers.delete(id); },
     fetch: async url => {
       stats.requests.push(url);
       return { ok: true, json: async () => url.includes('latest') ? null : [] };
     },
     document: {
+      hidden:false,
+      addEventListener(name,callback) { documentListeners[name]=callback; },
       getElementById(id) { assert(nodes.has(id), 'Missing HTML element: ' + id); return nodes.get(id); },
       createElement() { return { children: [], append(...children) { this.children.push(...children); } }; }
     }
   });
   vm.runInContext(code.slice(0, code.indexOf("if('serviceWorker'in navigator)")), context);
   return {
-    context, nodes, frames, stats, run: text => vm.runInContext(text, context),
+    context, nodes, frames, stats, timers,documentListeners, run: text => vm.runInContext(text, context),
+    advance(ms) { clock+=ms;for(const [id,timer] of [...timers])if(timer.at<=clock){timers.delete(id);timer.callback();} },
     paint() { const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback()); }
   };
 }
@@ -65,6 +77,66 @@ function seed(h) {
 }
 
 async function tests() {
+  function pointer(x,y=40,id=1,extra={}) {
+    return {clientX:x,clientY:y,pointerId:id,isPrimary:true,button:0,
+      preventDefault(){this.defaultPrevented=true;},...extra};
+  }
+  const hold=harness();seed(hold);
+  const slider=hold.nodes.get('hour');
+  for(let attempt=0;attempt<2;attempt++) {
+    slider.onpointerdown(pointer(208));hold.advance(1100);slider.onpointerup(pointer(208));
+  }
+  hold.advance(2000);
+  assert.equal(hold.run('chosenHour'),12,'Short taps never change the hour or accumulate hold time');
+  slider.onpointerdown(pointer(208));hold.advance(1999);
+  assert.equal(hold.run('chosenHour'),12,'No change before two seconds');
+  slider.value='18';slider.oninput({target:slider});
+  assert.equal(slider.value,'12','Native pointer input cannot bypass the hold');
+  hold.advance(1);
+  assert.equal(hold.run('chosenHour'),18,'Held track tap selects at two seconds');
+  assert.equal(hold.nodes.get('hour-control').dataset.pressState,'dragging');
+  assert.equal(hold.nodes.get('hour-preview').textContent,'18');
+  slider.onpointermove(pointer(238));
+  assert.equal(hold.nodes.get('hour-preview').textContent,'21','Large readout follows dragging immediately');
+  slider.onpointerup(pointer(238));
+  assert.equal(hold.nodes.get('temp').textContent,'21.0');
+  assert.equal(hold.nodes.get('hour-control').dataset.pressState,'idle');
+  assert.equal(hold.frames.size,0);
+  assert.equal(slider.captures.size,0);
+
+  const grip=harness();seed(grip);
+  grip.nodes.get('hour').onpointerdown(pointer(168));grip.advance(2000);
+  assert.equal(grip.run('chosenHour'),12,'Holding the edge of the thumb does not jump');
+  grip.nodes.get('hour').onpointermove(pointer(228));
+  assert.equal(grip.run('chosenHour'),18,'Grip offset is preserved while dragging');
+  grip.nodes.get('hour').onpointermove(pointer(-100));
+  assert.equal(grip.run('chosenHour'),0);
+  grip.nodes.get('hour').onpointermove(pointer(500));
+  assert.equal(grip.run('chosenHour'),24);
+  grip.nodes.get('hour').onpointerup(pointer(500));
+
+  for(const action of ['scroll','early-drag','cancel','lost-capture','blur','hidden']) {
+    const cancel=harness();seed(cancel);
+    const input=cancel.nodes.get('hour');input.onpointerdown(pointer(208));cancel.advance(1000);
+    if(action==='scroll')input.onpointermove(pointer(208,80));
+    if(action==='early-drag')input.onpointermove(pointer(238));
+    if(action==='cancel')input.onpointercancel(pointer(208));
+    if(action==='lost-capture')input.onlostpointercapture(pointer(208));
+    if(action==='blur')input.onblur();
+    if(action==='hidden'){cancel.context.document.hidden=true;cancel.documentListeners.visibilitychange();}
+    cancel.advance(2000);
+    assert.equal(cancel.run('chosenHour'),12,action+' cancels pending changes');
+    assert.equal(cancel.timers.size,0);
+    assert.equal(cancel.nodes.get('hour-control').dataset.pressState,'idle');
+  }
+  const ruler=harness();seed(ruler);ruler.run('selectHour(11)');ruler.paint();
+  ruler.nodes.get('hour-ruler').onpointerdown(pointer(148,95));ruler.advance(2000);
+  assert.equal(ruler.run('chosenHour'),12,'A held scale-label tap selects its exact hour');
+  ruler.nodes.get('hour').onpointerup(pointer(148,95));
+  ruler.nodes.get('hour').onpointerdown(pointer(208,40,2,{isPrimary:false}));
+  ruler.nodes.get('hour').onpointerdown(pointer(208,40,1,{button:2}));
+  assert.equal(ruler.timers.size,0,'Secondary touch and right mouse button are ignored');
+
   const h = harness();
   seed(h);
   assert.equal(h.run('chosenHour'), 12);
@@ -218,7 +290,7 @@ async function tests() {
     const asset=html.match(new RegExp(name.replace('.','\\.')+'\\?v=\\d+'))[0];
     assert(sw.includes(asset),'Service worker and HTML asset versions match');
   }
-  console.log('PASS: immediate thumb, coalesced rendering, 25 hours, date navigation, midnight, archive cache, rain totals, offline refresh, request races, month deduplication, gauges, wind, forecast and service worker.');
+  console.log('PASS: two-second hold, short taps, drag cancellation, scale-label hold, large live preview, immediate thumb, coalesced rendering, 25 hours, navigation, midnight, cache, rain, offline refresh, request races, wind, forecast and service worker.');
 }
 
 function benchmark(code) {

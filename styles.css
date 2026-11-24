@@ -47,3 +47,12 @@
 
 .windsock-fabric{fill:var(--sock-fabric)}.windsock-stripes{fill:var(--sock-stripes)}.windsock-outline{stroke:var(--sock-outline)}.windsock-mouth{fill:var(--sock-mouth);stroke:var(--sock-rim)}
 .windsock-caption{display:block;text-align:center;font-size:12px;font-weight:600;line-height:1.25;white-space:nowrap;font-variant-numeric:tabular-nums}.windsock-caption small{display:block;font-size:10px;font-weight:400;line-height:1.4}
+
+.hour-preview{position:absolute;z-index:3;transform:translateX(-50%);left:clamp(52px,calc(var(--hour-position,50%) + var(--hour-offset,0px)),calc(100% - 52px));bottom:calc(50% + 48px);box-sizing:border-box;width:104px;padding:8px 12px;border:1px solid #365c7c;border-radius:16px;background:#193956;color:#fff;text-align:center;font-size:56px;font-weight:750;line-height:1.1;font-variant-numeric:tabular-nums;box-shadow:0 5px 18px #12294530;pointer-events:none;visibility:hidden;user-select:none}
+.hour-control[data-press-state="dragging"] .hour-preview{visibility:visible}
+.hour-control[data-press-state="holding"] .hour-thumb-value{outline:3px solid #d49b38;outline-offset:3px;border-radius:50%}
+.hour-help{font-size:.8125rem;line-height:1.5;color:#60748b;margin-top:4px}
+.hour-slider{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+@media(prefers-color-scheme:dark){.hour-preview{background:#d9eaf7;color:#122945;border-color:#a5cee9}.hour-help{color:#abbdd0}}
+
+.hour-ruler{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}

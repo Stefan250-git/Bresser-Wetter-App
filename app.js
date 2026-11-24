@@ -23,6 +23,7 @@ function updateHourControl() {
   if ($('hour').value !== String(chosenHour)) $('hour').value = String(chosenHour);
   $('hour').setAttribute('aria-valuetext', hourLabel(chosenHour));
   $('hour-value').textContent = String(chosenHour);
+  $('hour-preview').textContent = String(chosenHour);
   $('hour-control').style.setProperty('--hour-position', (chosenHour / 24 * 100)+'%');
   $('hour-control').style.setProperty('--hour-offset', (28 - chosenHour / 24 * 56)+'px');
 }
@@ -44,10 +45,73 @@ function selectHour(value) {
     renderSelection();
   });
 }
-$('hour').oninput = event => selectHour(event.target.value);
+// Pointer changes require a continuous two-second hold. Keyboard input stays native.
+let hourPress = null;
+function hourFromPointer(clientX, offset=0) {
+  const rect=$('hour').getBoundingClientRect();
+  return Math.max(0,Math.min(24,Math.round((clientX-rect.left-28-offset)/Math.max(1,rect.width-56)*24)));
+}
+function endHourPress(event) {
+  const press=hourPress;
+  if (!press || (event?.pointerId !== undefined && event.pointerId !== press.id)) return;
+  hourPress=null;
+  clearTimeout(press.timer);
+  $('hour-control').dataset.pressState='idle';
+  if (press.active) flushHourSelection();
+  if ($('hour').hasPointerCapture(press.id)) $('hour').releasePointerCapture(press.id);
+}
+$('hour').onpointerdown = event => {
+  if (event.isPrimary === false || event.button !== 0) return;
+  event.preventDefault();
+  endHourPress();
+  $('hour').focus({preventScroll:true});
+  const rect=$('hour').getBoundingClientRect();
+  const center=rect.left+28+(rect.width-56)*chosenHour/24;
+  const onThumb=Math.abs(event.clientX-center)<=28 && Math.abs(event.clientY-rect.top-rect.height/2)<=28;
+  const press={id:event.pointerId,startX:event.clientX,startY:event.clientY,x:event.clientX,
+    offset:onThumb?event.clientX-center:0,active:false,timer:null};
+  hourPress=press;
+  $('hour-control').dataset.pressState='holding';
+  $('hour').setPointerCapture(press.id);
+  press.timer=setTimeout(() => {
+    if (hourPress !== press) return;
+    press.active=true;
+    $('hour-control').dataset.pressState='dragging';
+    selectHour(hourFromPointer(press.x,press.offset));
+  },2000);
+};
+$('hour').onpointermove = event => {
+  const press=hourPress;
+  if (!press || press.id !== event.pointerId) return;
+  if (!press.active && Math.hypot(event.clientX-press.startX,event.clientY-press.startY)>12) {
+    endHourPress(event);return;
+  }
+  press.x=event.clientX;
+  if (press.active) { event.preventDefault();selectHour(hourFromPointer(press.x,press.offset)); }
+};
+$('hour').onpointerup = event => {
+  if (!hourPress || hourPress.id !== event.pointerId) return;
+  event.preventDefault();
+  if (hourPress.active) selectHour(hourFromPointer(event.clientX,hourPress.offset));
+  endHourPress(event);
+};
+$('hour').onpointercancel=endHourPress;
+$('hour').onlostpointercapture=endHourPress;
+$('hour').onblur=()=>endHourPress();
+$('hour').onkeydown=()=>endHourPress();
+$('hour').onclick=event=>event.preventDefault();
+$('hour').oncontextmenu=event=>event.preventDefault();
+$('hour-ruler').onpointerdown=$('hour').onpointerdown;
+$('hour-ruler').oncontextmenu=$('hour').oncontextmenu;
+document.addEventListener('visibilitychange',()=>{if(document.hidden)endHourPress();});
+$('hour').oninput = event => {
+  if (hourPress) { updateHourControl();return; }
+  selectHour(event.target.value);
+};
 $('hour').onchange = flushHourSelection;
 function changeDate(v) {
   if (!v || v > dateBerlin() || v === chosenDay) return;
+  endHourPress();
   chosenDay=v;$('date').value=v;$('next').disabled=v>=dateBerlin();
   render();
   return loadRelevant().then(() => { if (chosenDay === v) render(); });

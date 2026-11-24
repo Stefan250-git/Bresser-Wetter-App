@@ -5,6 +5,7 @@ Mobile App für die öffentliche Weathercloud-Station `d1073176104` (46499, NRW)
 ## Enthalten
 - Aktuelle und historische Messwerte: Temperatur, bedingte gefühlte Temperatur, Niederschlagsintensität, Tages-/Wochen-/Monatssummen, Vorjahresvergleich, heutiger Wind und Richtung
 - Datumsauswahl und Stundenregler von 00:00 bis zum Tagesende (24:00), standardmäßig 12:00 Uhr
+- Regler mit 2 Sekunden Haltezeit bei Berührung/Maus und großer Stundenanzeige oberhalb des Fingers; Tastaturbedienung bleibt direkt möglich
 - Drei-Tage-Ausblick über Open-Meteo, getrennt von eigenen Stationsmessungen
 - PWA zur Installation auf iOS und Android
 - Archivsammler als GitHub Action alle 10 Minuten (Best-Effort, nicht minutengenau garantiert)
