@@ -21,11 +21,11 @@
 .wind-values{flex:1 1 0;min-width:0}.wind-origin{font-size:.875rem;line-height:1.5;margin-top:8px;overflow-wrap:anywhere}
 .wind-compass{flex:0 0 auto;width:clamp(132px,38vw,220px);max-width:50%;margin-left:auto;color:#23435d}
 .windsock-scale{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin-bottom:12px}
-.windsock-level{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:6px 1px;border:1px solid transparent;border-radius:10px;color:#60748b}
+.windsock-level{--sock-fabric:#dce5ee;--sock-stripes:#637f99;--sock-outline:#526d85;--sock-mouth:#526d85;--sock-rim:#b4c6d6;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:6px 1px;border:0;background:none;color:#526d85}
 .windsock-level svg{display:block;width:min(100%,48px);height:auto;opacity:1}
-.windsock-level[data-active="true"]{color:#a32735;background:#fff0f1;border-color:#dc7180;font-weight:750}
+.windsock-level[data-active="true"]{--sock-fabric:#fff;--sock-stripes:#df3542;--sock-outline:#ab2934;--sock-mouth:#b62b36;--sock-rim:#f6c0c4}
 .windsock-level[data-active="true"] svg{opacity:1}
-@media(prefers-color-scheme:dark){.wind-compass{color:#c0d8ed}.windsock-level{color:#abbdd0}.windsock-level[data-active="true"]{color:#ffcad0;background:#482c36;border-color:#cb7e8a}}
+@media(prefers-color-scheme:dark){.wind-compass{color:#c0d8ed}.windsock-level{color:#c0d0dc}.windsock-level:not([data-active="true"]){--sock-fabric:#6e879d;--sock-stripes:#b1c6d8;--sock-outline:#c0d0dc;--sock-mouth:#9bb2c6;--sock-rim:#d1deea}}
 
 .hour-picker{margin-top:18px}
 .hour-control{position:relative;height:80px}
@@ -44,3 +44,6 @@
 .date-nav{grid-template-columns:44px minmax(0,1fr) 44px}.date-nav input{min-width:0;font-size:16px}.date-nav button{min-height:44px}.icon-button{flex-shrink:0}.icon-button:disabled,.date-nav button:disabled{opacity:.45;cursor:default}button:focus-visible{outline:3px solid #438dc6;outline-offset:3px}.hour-slider{touch-action:pan-y}.hint{font-size:.8125rem}
 
 .measurement-controls .hint{min-height:3em}
+
+.windsock-fabric{fill:var(--sock-fabric)}.windsock-stripes{fill:var(--sock-stripes)}.windsock-outline{stroke:var(--sock-outline)}.windsock-mouth{fill:var(--sock-mouth);stroke:var(--sock-rim)}
+.windsock-caption{display:block;text-align:center;font-size:12px;font-weight:600;line-height:1.25;white-space:nowrap;font-variant-numeric:tabular-nums}.windsock-caption small{display:block;font-size:10px;font-weight:400;line-height:1.4}
