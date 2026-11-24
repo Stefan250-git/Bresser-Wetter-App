@@ -83,18 +83,17 @@ const direction=deg=>{if(!Number.isFinite(deg))return '—';return ['N','NO','O'
 // https://www.dwd.de/DE/fachnutzer/landwirtschaft/dokumentationen/isabel/windgeschwindigkeit_dokumentation.pdf
 function windStrength(speed) {
   if (!Number.isFinite(speed) || speed < 0) return null;
-  if (speed < 1) return {level:0, label:'Windstill'};
-  if (speed < 20) return {level:1, label:'Leichter Wind'};
-  if (speed < 29) return {level:2, label:'M\u00e4\u00dfiger Wind'};
-  if (speed < 39) return {level:3, label:'Frischer Wind'};
-  return {level:4, label:speed >= 118 ? 'Orkan' : speed >= 62 ? 'Sturm' : speed >= 50 ? 'Steifer Wind' : 'Starker Wind'};
+  // Six requested Beaufort groups: 0-3, 4-5, 6-7, 8-9, 10-11, 12.
+  const index = [20,39,62,89,118].findIndex(limit => speed < limit);
+  const level = index < 0 ? 5 : index;
+  return {level, label:['Bft 0-3','Bft 4-5','Bft 6-7','Bft 8-9','Bft 10-11','Bft 12'][level]};
 }
 function renderWind(wind) {
   const strength = windStrength(wind?.wind_speed);
   $('wind').textContent = strength ? fmt(wind.wind_speed) : '\u2014';
   $('wind-strength').textContent = strength ? strength.label : 'Keine Windmessung vorhanden';
-  for (let i=0;i<5;i++) $('windsock-'+i).dataset.active = String(strength?.level === i);
-  const calm = strength?.level === 0;
+  for (let i=0;i<6;i++) $('windsock-'+i).dataset.active = String(strength?.level === i);
+  const calm = Number.isFinite(wind?.wind_speed) && wind.wind_speed >= 0 && wind.wind_speed < 1;
   const hasDirection = !calm && Number.isFinite(wind?.wind_direction);
   const degrees = hasDirection ? (wind.wind_direction % 360 + 360) % 360 : 0;
   const names = ['Norden','Nordosten','Osten','S\u00fcdosten','S\u00fcden','S\u00fcdwesten','Westen','Nordwesten'];
