@@ -170,8 +170,13 @@ function renderRiver() {
   $('river-trend').textContent=trend===null?'Trend nicht verfügbar':
     (trend>0?'↗ Steigend':trend<0?'↘ Fallend':'→ Gleichbleibend')+' · '+
     (trend>0?'+':'')+fmt(trend,Number.isInteger(trend)?0:1)+' cm in 1 Stunde';
+  const center=status.key==='unknown'?'normal':status.key;
+  const others=['low','normal','high'].filter(key=>key!==center);
+  const positions=[others[0],center,others[1]];
   for(const key of ['low','normal','high']) {
     $('river-'+key).dataset.current=String(status.key===key);
+    $('river-'+key).dataset.position=key===center?'center':'side';
+    $('river-'+key).style.setProperty('--river-column',String(positions.indexOf(key)+1));
     $('river-'+key).setAttribute('aria-label',({low:'Niedrig',normal:'Normal',high:'Hoch'})[key]+(status.key===key?' – aktueller Zustand':''));
   }
   $('river-time').textContent=riverReading?

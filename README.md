@@ -68,7 +68,7 @@ Die Einordnung Niedrig/Normal/Hoch übernimmt unverändert `stateMnwMhw` aus [PE
 
 Abruf beim Start, beim manuellen Aktualisieren, bei Rückkehr zur App und alle zehn Minuten bei sichtbarer App. Gleichzeitige Anfragen werden zusammengefasst, erfolgreiche Abrufe für eine Minute wiederverwendet und hängende Anfragen nach zehn Sekunden abgebrochen. Pegeldaten werden nicht im Service Worker gespeichert. Die Tages-/Stundenauswahl beeinflusst den aktuellen Rheinpegel nicht.
 
-Die drei fotorealistischen Darstellungen sind KI-generierte Symbolbilder, keine aktuellen Aufnahmen. [Bild und Generierungs-Prompt](assets/README.md#rheinpegel-symbolbilder).
+Die drei fotorealistischen Darstellungen sind KI-generierte Symbolbilder, keine aktuellen Aufnahmen. Der aktuelle Zustand steht gr??er in der Mitte, die beiden anderen kleiner links und rechts. [Bild und Generierungs-Prompt](assets/README.md#rheinpegel-symbolbilder).
 
 Der Trend vergleicht den aktuellen Wasserstand mit der PEGELONLINE-Messung von einer Stunde zuvor: Pfeil und Steigend/Fallend/Gleichbleibend sowie die Änderung in Zentimetern. Der Vergleich orientiert sich am Zeitstempel des aktuellen Messwerts, auch über Tages- und Zeitumstellungsgrenzen hinweg. Fehlt der Vergleichswert (maximal zwei Minuten Zeitabweichung), erscheint „Trend nicht verfügbar“. Ein Ausfall der historischen Daten blendet den aktuellen Wasserstand nicht aus.
 

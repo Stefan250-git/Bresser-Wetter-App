@@ -11,7 +11,7 @@ The application positions the image inside an SVG disc and clips the illuminated
 
 ## Rheinpegel-Symbolbilder
 
-Final asset: `assets/rhine-levels.jpg` (three equal panels: low, normal, high water). Created on 2026-11-24 using the built-in `image_gen` tool in generate mode with no reference images. The generated PNG was encoded as JPEG at quality 85 for delivery in the app. The three panels share one asset and are cropped with CSS. They are symbolic, AI-generated illustrations rather than live photographs of Wesel. The app labels them as Symbolbilder.
+Final asset: `assets/rhine-levels.jpg` (three equal panels: low, normal, high water). Created on 2026-11-24 using the built-in `image_gen` tool in generate mode with no reference images. The generated PNG was encoded as JPEG at quality 85 for delivery in the app. The three panels share one asset and are cropped with CSS. They are symbolic, AI-generated illustrations rather than live photographs of Wesel. The source and generation details are documented here; the app shows only the water-level labels.
 
 Final prompt:
 
