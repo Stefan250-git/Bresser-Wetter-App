@@ -1,11 +1,11 @@
 
-const CACHE = 'bresser-v4';
+const CACHE = 'bresser-v5';
 
 const STATIC = [
   './',
   './index.html',
-  './styles.css',
-  './app.js',
+  './styles.css?v=5',
+  './app.js?v=5',
   './icon.svg',
   './manifest.webmanifest'
 ];
