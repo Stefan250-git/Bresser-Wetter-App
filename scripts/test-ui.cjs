@@ -405,9 +405,34 @@ async function tests() {
   assert.equal(lunar.nodes.get('moon-phase').textContent,'Vollmond','Moon is current even when an archive date is selected');
   assert(lunar.nodes.get('moon-time').textContent.includes('24.11.26'));
   assert.equal(lunar.stats.requests.length,0,'Moon works offline without a network call');
+  assert.equal(lunar.nodes.get('moon-day-prev2').textContent,'22.11.');
+  assert.equal(lunar.nodes.get('moon-day-prev1').textContent,'23.11.');
+  assert.equal(lunar.nodes.get('moon-day-today').textContent,'Heute');
+  assert.equal(lunar.nodes.get('moon-day-next1').textContent,'25.11.');
+  assert.equal(lunar.nodes.get('moon-day-next2').textContent,'26.11.');
+  assert.equal(lunar.nodes.get('moon-next-full').textContent,'Nächster Vollmond: 24.11.2026');
+  const fullMoons=['2026-01-03T10:03:00Z','2026-02-01T22:09:00Z','2026-03-03T11:38:00Z','2026-04-02T02:12:00Z','2026-05-01T17:23:00Z','2026-05-31T08:45:00Z','2026-06-29T23:56:00Z','2026-07-29T14:36:00Z','2026-08-28T04:18:00Z','2026-09-26T16:49:00Z','2026-10-26T04:12:00Z','2026-11-24T14:53:00Z','2026-12-24T01:28:00Z','2027-01-22T12:17:00Z'];
+  for(const reference of fullMoons) {
+    const expected=Date.parse(reference);lunar.context.before=expected-2*86400000;
+    const actual=lunar.run('nextFullMoon(new Date(before)).valueOf()');
+    assert(Math.abs(actual-expected)<120000,'Full moon agrees within two minutes of USNO: '+reference);
+  }
+  lunar.run("renderMoon(new Date('2026-11-24T20:00:00Z'))");
+  assert.equal(lunar.nodes.get('moon-next-full').textContent,'Nächster Vollmond: 24.12.2026','After the event, advance to the following full moon');
+  lunar.run("renderMoon(new Date('2026-06-28T12:00:00Z'))");
+  assert.equal(lunar.nodes.get('moon-next-full').textContent,'Nächster Vollmond: 30.06.2026','Full-moon date uses Berlin time, not UTC');
+  for(const [date,labels] of [
+    ['2026-03-30T00:30:00+02:00',['28.03.','29.03.','Heute','31.03.','01.04.']],
+    ['2026-10-26T00:30:00+01:00',['24.10.','25.10.','Heute','27.10.','28.10.']],
+    ['2026-12-31T23:30:00+01:00',['29.12.','30.12.','Heute','01.01.','02.01.']]
+  ]) {
+    lunar.context.date=date;lunar.run('renderMoon(new Date(date))');
+    for(const [index,key] of ['prev2','prev1','today','next1','next2'].entries())assert.equal(lunar.nodes.get('moon-day-'+key).textContent,labels[index],'Calendar days survive DST and year boundaries');
+  }
   lunar.run("renderMoon(new Date('invalid'))");
   assert.equal(lunar.nodes.get('moon-illumination').textContent,'\u2014');
   assert.equal(lunar.nodes.get('moon-lit').attributes.d,'');
+  assert.equal(lunar.nodes.get('moon-next-full').textContent,'Nächster Vollmond: nicht verfügbar');
   assert(html.indexOf('id="moon-title"')>html.indexOf('id="wind-time"'));
   assert(html.indexOf('id="moon-title"')<html.indexOf('>Ausblick'));
 
@@ -425,7 +450,7 @@ async function tests() {
     const asset=html.match(new RegExp(name.replace('.','\\.')+'\\?v=\\d+'))[0];
     assert(sw.includes(asset),'Service worker and HTML asset versions match');
   }
-  console.log('PASS: current moon against USNO phases, moon orientation/offline/archive independence, gauge readings, compass animation, two-second slider, navigation, archive lookup, offline refresh, wind, weather states, shared forecast and service worker.');
+  console.log('PASS: five-day moon timeline, DST/year boundaries, 14 USNO full-moon references, Berlin full-moon dates, moon orientation/offline support, gauges, compass, slider, navigation, weather and service worker.');
 }
 
 function benchmark(code) {

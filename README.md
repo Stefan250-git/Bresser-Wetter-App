@@ -50,6 +50,8 @@ Beim Hereinscrollen schwingt die Kompassnadel viermal minimal mit abnehmendem Au
 
 Unter Wind zeigt die App die aktuelle Mondphase, den beleuchteten Anteil und eine schematische Ansicht für die Nordhalbkugel. Die astronomische Näherungsrechnung ist aus SunCalc 1.9.0 adaptiert; die [Lizenz](third-party/SunCalc-LICENSE.txt) liegt bei. Die Anzeige ist unabhängig von der gewählten Archivzeit und funktioniert ohne Netzwerk. Sie wird beim Öffnen, Aktualisieren und regelmäßig bei sichtbarer App erneuert. Sie trifft keine Aussage darüber, ob der Mond gerade über dem Horizont steht.
 
+Die Karte zeigt heute mit Prozentangabe in der größeren Mitte, je zwei Kalendertage davor und danach. Die Nachbartage werden jeweils für 12:00 Uhr in Berlin berechnet; heute verwendet den aktuellen Zeitpunkt. Das nächste Vollmonddatum wird offline nach Meeus berechnet und als Berliner Kalenderdatum ausgegeben. Die adaptierten [MeeusSunMoon-Formeln](https://github.com/janrg/MeeusSunMoon) stehen unter der beiliegenden [MIT-Lizenz](third-party/MeeusSunMoon-LICENSE.txt).
+
 Die Tests vergleichen die Berechnung mit den [USNO-Referenzphasen für November/Dezember 2026](https://aa.usno.navy.mil/calculated/moon/phases?date=2026-11-01&format=p&nump=8).
 
 ## Bedienlogik prüfen

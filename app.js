@@ -369,19 +369,67 @@ function moonDiscPath(fraction,waxing) {
   const outer=waxing?1:0,inner=light<.5?1-outer:outer;
   return 'M80 22 A58 58 0 0 '+outer+' 80 138 '+(terminator<.000001?'L80 22':'A'+terminator.toFixed(3)+' 58 0 0 '+inner+' 80 22')+' Z';
 }
+// Full-moon timing: Meeus, Astronomical Algorithms ch. 49, adapted from
+// MeeusSunMoon (MIT): third-party/MeeusSunMoon-LICENSE.txt.
+function fullMoonEpoch(cycle) {
+  const k=cycle+.5,t=k/1236.85,e=1-.002516*t-.0000074*t*t;
+  const sin=degrees=>Math.sin(degrees*Math.PI/180);
+  const m=2.5534+29.10535670*k-.0000014*t*t-.00000011*t**3;
+  const p=201.5643+385.81693528*k+.0107582*t*t+.00001238*t**3-.000000058*t**4;
+  const f=160.7108+390.67050284*k-.0016118*t*t-.00000227*t**3+.000000011*t**4;
+  const node=124.7746-1.56375588*k+.0020672*t*t+.00000215*t**3;
+  const terms=[[-.40614,p],[.17302*e,m],[.01614,2*p],[.01043,2*f],[.00734*e,p-m],[-.00515*e,p+m],[.00209*e*e,2*m],[-.00111,p-2*f],[-.00057,p+2*f],[.00056*e,2*p+m],[-.00042,3*p],[.00042*e,m+2*f],[.00038*e,m-2*f],[-.00024*e,2*p-m],[-.00017,node],[-.00007,p+2*m],[.00004,2*p-2*f],[.00004,3*m],[.00003,p+m-2*f],[.00003,2*p+2*f],[-.00003,p+m+2*f],[.00003,p-m+2*f],[-.00002,p-m-2*f],[-.00002,3*p+m],[.00002,4*p]];
+  const planets=[[.000325,299.77+.107408*k-.009173*t*t],[.000165,251.88+.016321*k],[.000164,251.83+26.651886*k],[.000126,349.42+36.412478*k],[.000110,84.66+18.206239*k],[.000062,141.74+53.303771*k],[.000060,207.14+2.453732*k],[.000056,154.84+7.306860*k],[.000047,34.52+27.261239*k],[.000042,207.19+.121824*k],[.000040,291.34+1.844379*k],[.000037,161.72+24.198154*k],[.000035,239.56+25.513099*k],[.000023,331.55+3.592518*k]];
+  const correction=terms.concat(planets).reduce((sum,[coefficient,angle])=>sum+coefficient*sin(angle),0);
+  const jde=2451550.09766+29.530588861*k+.00015437*t*t-.000000150*t**3+.00000000073*t**4+correction;
+  // NASA's modern-era Delta-T approximation converts dynamical time to UT.
+  const yearOffset=k/12.3685,deltaT=62.92+.32217*yearOffset+.005589*yearOffset*yearOffset;
+  return (jde-2440587.5)*86400000-deltaT*1000;
+}
+function nextFullMoon(date=new Date()) {
+  const epoch=date.valueOf();if(!Number.isFinite(epoch))return null;
+  const cycle=Math.floor((epoch/86400000+2440587.5-2451550.09766)/29.530588861)-1;
+  for(let index=cycle;index<cycle+5;index++) {
+    const next=fullMoonEpoch(index);if(next>epoch)return new Date(next);
+  }
+  return null;
+}
+const moonDayFormatter=new Intl.DateTimeFormat('de-DE',{timeZone:TZ,day:'2-digit',month:'2-digit'});
+const moonDays=[[-2,'prev2'],[-1,'prev1'],[0,'today'],[1,'next1'],[2,'next2']];
+function moonDaySample(day) {
+  const noon=new Date(day+'T12:00:00Z');
+  const parts=Object.fromEntries(recordFormatter.formatToParts(noon).map(part=>[part.type,part.value]));
+  return new Date(noon.valueOf()-((Number(parts.hour)-12)*60+Number(parts.minute))*60000);
+}
 function renderMoon(date=new Date()) {
   const moon=moonIllumination(date);
   if(!moon) {
     $('moon-phase').textContent='Mondphase nicht verf\u00fcgbar';$('moon-illumination').textContent='\u2014';
     $('moon-trend').textContent='';$('moon-time').textContent='Ger\u00e4tezeit nicht verf\u00fcgbar';
-    $('moon-lit').setAttribute('d','');$('moon-graphic').setAttribute('aria-label','Mondphase nicht verf\u00fcgbar');return;
+    $('moon-next-full').textContent='N\u00e4chster Vollmond: nicht verf\u00fcgbar';
+    for(const [offset,key] of moonDays) {
+      $('moon-day-'+key).textContent=offset===0?'Heute':'\u2014';
+      $(offset===0?'moon-lit':'moon-lit-'+key).setAttribute('d','');
+      $(offset===0?'moon-graphic':'moon-graphic-'+key).setAttribute('aria-label','Mondphase nicht verf\u00fcgbar');
+    }
+    return;
   }
-  const waxing=moon.phase<.5,name=moonPhaseName(moon.fraction,waxing),percent=fmt(Math.round(moon.fraction*100),0);
-  $('moon-phase').textContent=name;$('moon-illumination').textContent=percent+' %';
-  $('moon-trend').textContent=moon.fraction<=.005||moon.fraction>=.995?'':waxing?'Zunehmend':'Abnehmend';
-  $('moon-lit').setAttribute('d',moonDiscPath(moon.fraction,waxing));
-  $('moon-graphic').setAttribute('aria-label',name+', '+percent+' Prozent beleuchtet');
-  $('moon-graphic').setAttribute('title','Astronomisch berechnet \u00b7 schematische Ansicht f\u00fcr die Nordhalbkugel');
+  const day=dayFormatter.format(date);
+  for(const [offset,key] of moonDays) {
+    const sample=offset===0?date:moonDaySample(addDay(day,offset));
+    const illumination=offset===0?moon:moonIllumination(sample),waxing=illumination.phase<.5;
+    const name=moonPhaseName(illumination.fraction,waxing),percent=fmt(Math.round(illumination.fraction*100),0);
+    $('moon-day-'+key).textContent=offset===0?'Heute':moonDayFormatter.format(sample);
+    $(offset===0?'moon-lit':'moon-lit-'+key).setAttribute('d',moonDiscPath(illumination.fraction,waxing));
+    const graphic=$(offset===0?'moon-graphic':'moon-graphic-'+key);
+    graphic.setAttribute('aria-label',selectedDateFormatter.format(sample)+': '+name+', '+percent+' Prozent beleuchtet');
+    graphic.setAttribute('title',readingFormatter.format(sample)+' \u00b7 schematische Ansicht f\u00fcr die Nordhalbkugel');
+  }
+  const name=moonPhaseName(moon.fraction,moon.phase<.5);
+  $('moon-phase').textContent=name;$('moon-illumination').textContent=fmt(Math.round(moon.fraction*100),0)+' %';
+  $('moon-trend').textContent=moon.fraction<=.005||moon.fraction>=.995?'':moon.phase<.5?'Zunehmend':'Abnehmend';
+  const next=nextFullMoon(date);
+  $('moon-next-full').textContent='N\u00e4chster Vollmond: '+(next?selectedDateFormatter.format(next):'nicht verf\u00fcgbar');
   $('moon-time').textContent='Stand: '+readingFormatter.format(date);
 }
 
