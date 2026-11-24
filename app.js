@@ -79,6 +79,33 @@ function latestForDay(day,limit){return recordsForDay(day).filter(r=>!limit||r.t
 function periodRain(day,kind,limit){if(kind==='day')return latestForDay(day,limit)?.rain_day??null;if(kind==='month')return latestForDay(day,limit)?.rain_month??null;const dow=(new Date(day+'T12:00:00Z').getUTCDay()+6)%7;const days=range(addDay(day,-dow),day);let total=0;for(const d of days){const arr=recordsForDay(d);if(!arr.length)return null;const val=d===day?latestForDay(d,limit):arr.sort((a,b)=>a.timestamp.localeCompare(b.timestamp)).at(-1);if(!Number.isFinite(val?.rain_day))return null;total+=val.rain_day;}return total}
 const direction=deg=>{if(!Number.isFinite(deg))return '—';return ['N','NO','O','SO','S','SW','W','NW'][Math.round(deg/45)%8]};
 
+// Simplified wind classes based on Beaufort km/h ranges (DWD).
+// https://www.dwd.de/DE/fachnutzer/landwirtschaft/dokumentationen/isabel/windgeschwindigkeit_dokumentation.pdf
+function windStrength(speed) {
+  if (!Number.isFinite(speed) || speed < 0) return null;
+  if (speed < 1) return {level:0, label:'Windstill'};
+  if (speed < 20) return {level:1, label:'Leichter Wind'};
+  if (speed < 29) return {level:2, label:'M\u00e4\u00dfiger Wind'};
+  if (speed < 39) return {level:3, label:'Frischer Wind'};
+  return {level:4, label:speed >= 118 ? 'Orkan' : speed >= 62 ? 'Sturm' : speed >= 50 ? 'Steifer Wind' : 'Starker Wind'};
+}
+function renderWind(wind) {
+  const strength = windStrength(wind?.wind_speed);
+  $('wind').textContent = strength ? fmt(wind.wind_speed) : '\u2014';
+  $('wind-strength').textContent = strength ? strength.label : 'Keine Windmessung vorhanden';
+  for (let i=0;i<5;i++) $('windsock-'+i).dataset.active = String(strength?.level === i);
+  const calm = strength?.level === 0;
+  const hasDirection = !calm && Number.isFinite(wind?.wind_direction);
+  const degrees = hasDirection ? (wind.wind_direction % 360 + 360) % 360 : 0;
+  const names = ['Norden','Nordosten','Osten','S\u00fcdosten','S\u00fcden','S\u00fcdwesten','Westen','Nordwesten'];
+  const origin = hasDirection ? 'Wind aus '+names[Math.round(degrees/45)%8]+' ('+direction(degrees)+') \u00b7 '+Math.round(degrees)%360+'\u00b0' : calm ? 'Windstill \u00b7 keine Windrichtung' : 'Windrichtung nicht verf\u00fcgbar';
+  $('direction').textContent = origin;
+  $('wind-compass').setAttribute('aria-label', origin);
+  $('wind-compass-pointer').setAttribute('transform', 'rotate('+degrees+' 90 90)');
+  $('wind-compass-pointer').setAttribute('opacity', hasDirection ? '1' : '0');
+  $('wind-time').textContent=wind?.timestamp?'Messung: '+new Date(wind.timestamp).toLocaleString('de-DE',{timeZone:TZ,timeStyle:'short'}):'Keine aktuelle Windmessung';
+}
+
 // Fixed Celsius scale shared by both speedometers; numeric values remain exact.
 function updateTemperatureGauge(kind, value) {
   const gauge = $(kind+'-gauge');
@@ -107,7 +134,7 @@ $('selected-hint').textContent=r?'Messwert am gewählten Zeitpunkt (±20 Minuten
 const priorDay=(+chosenDay.slice(0,4)-1)+chosenDay.slice(4),prev=latestForDay(priorDay,until?priorDay+'T23:59:59Z':null);const curr=periodRain(chosenDay,'month',until),old=prev?.rain_month;
 $('compare').textContent=Number.isFinite(curr)&&Number.isFinite(old)?`Vorjahr bis ${priorDay.slice(5).replace('-','.')}.: ${fmt(old)} mm · ${fmt(curr-old)} mm (${old>0?fmt((curr-old)/old*100,0)+' %':'Prozentvergleich nicht möglich'})`:'Vorjahr: Keine vergleichbaren Stationsdaten';
 const wind=isToday?(live?.timestamp?.startsWith(chosenDay)?live:latestForDay(chosenDay)):null;
-$('wind').textContent=fmt(wind?.wind_speed);$('direction').textContent='Windrichtung '+direction(wind?.wind_direction)+(Number.isFinite(wind?.wind_direction)?` · ${Math.round(wind.wind_direction)}°`:'');$('wind-arrow').style.transform=`rotate(${Number.isFinite(wind?.wind_direction)?wind.wind_direction+180:0}deg)`;$('wind-time').textContent=wind?.timestamp?'Messung: '+new Date(wind.timestamp).toLocaleString('de-DE',{timeZone:TZ,timeStyle:'short'}):'Keine aktuelle Windmessung';
+renderWind(wind);
 }
 async function forecast(){try{const url=new URL('https://api.open-meteo.com/v1/forecast');Object.entries({latitude:LAT,longitude:LON,timezone:TZ,forecast_days:4,daily:'temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max'}).forEach(([k,v])=>url.searchParams.set(k,v));const x=await fetchJson(url),d=x.daily,days=[1,2,3].map(i=>({date:d.time[i],min:d.temperature_2m_min[i],max:d.temperature_2m_max[i],rain:d.precipitation_sum[i],p:d.precipitation_probability_max[i],gust:d.wind_gusts_10m_max[i]}));if(days.some(x=>!x.date))throw Error('Unvollständige Prognose');const start=(d.temperature_2m_max[0]+d.temperature_2m_min[0])/2,end=(days[2].max+days[2].min)/2,diff=end-start;const trend=Math.abs(diff)<2?'Die Temperaturen bleiben ungefähr gleich.':diff>0?'Die Temperaturen werden voraussichtlich steigen.':'Die Temperaturen werden voraussichtlich sinken.';const rain=days.filter(x=>(x.rain??0)>=0.5||(x.p??0)>=60);const windy=days.filter(x=>(x.gust??0)>=50);const entries=[['Temperatur',trend],['Niederschlag',rain.length?`Niederschlag an ${rain.map(x=>new Date(x.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'short'})).join(', ')} erwartet.`:'Derzeit kein nennenswerter Niederschlag prognostiziert.'],['Wind / Sturm',windy.length?`Erhöhte Windböen möglich (bis ${fmt(Math.max(...windy.map(x=>x.gust)),0)} km/h).`:'Derzeit keine stärkeren Windböen prognostiziert.']];$('forecast').replaceChildren();for(const [name,description]of entries){let n=document.createElement('div');n.className='forecast-item';let b=document.createElement('strong');b.textContent=name;let p=document.createElement('p');p.textContent=description;n.append(b,p);$('forecast').append(n)}}catch(e){$('forecast').textContent='Prognose derzeit nicht verfügbar.'}}
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});setup();slots();loadRelevant().then(render);forecast();
