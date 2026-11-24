@@ -94,7 +94,7 @@ function updateTemperatureGauge(kind, value) {
 function render(){
   slots();
 
-  $('current-temp').textContent = fmt(live?.temperature);
+  $('current-temp').textContent = fmt(live?.temperature).replace(',', '.');
   updateTemperatureGauge('current', live?.temperature);
 
   $('current-time').textContent = live?.timestamp
@@ -103,7 +103,7 @@ function render(){
 const isToday=chosenDay===dateBerlin();const time=times[chosenSlot],r=nearest(chosenDay,time),until=r?.timestamp;
 $('selected-time').textContent = new Date(chosenDay+'T12:00:00Z').toLocaleDateString('de-DE', {timeZone:TZ, day:'2-digit', month:'2-digit', year:'numeric'}) + ' · ' + time + ' Uhr';
 updateTemperatureGauge('selected', r?.temperature);
-$('selected-hint').textContent=r?'Messwert am gewählten Zeitpunkt (±20 Minuten)':'Keine Stationsmessung zu dieser Uhrzeit (±20 Minuten).';$('temp').textContent=fmt(r?.temperature);$('feels').textContent=fmt(r?.feels);$('reading-time').textContent=r?'Gemessen: '+new Date(r.timestamp).toLocaleString('de-DE',{timeZone:TZ,dateStyle:'short',timeStyle:'short'}):'Keine Messung vorhanden';$('rainrate').textContent=fmt(r?.rain_rate);$('rainday').textContent=fmt(periodRain(chosenDay,'day',until));$('rainweek').textContent=fmt(periodRain(chosenDay,'week',until));$('rainmonth').textContent=fmt(periodRain(chosenDay,'month',until));
+$('selected-hint').textContent=r?'Messwert am gewählten Zeitpunkt (±20 Minuten)':'Keine Stationsmessung zu dieser Uhrzeit (±20 Minuten).';$('temp').textContent=fmt(r?.temperature).replace(',', '.');$('feels').textContent=fmt(r?.feels);$('reading-time').textContent=r?'Gemessen: '+new Date(r.timestamp).toLocaleString('de-DE',{timeZone:TZ,dateStyle:'short',timeStyle:'short'}):'Keine Messung vorhanden';$('rainrate').textContent=fmt(r?.rain_rate);$('rainday').textContent=fmt(periodRain(chosenDay,'day',until));$('rainweek').textContent=fmt(periodRain(chosenDay,'week',until));$('rainmonth').textContent=fmt(periodRain(chosenDay,'month',until));
 const priorDay=(+chosenDay.slice(0,4)-1)+chosenDay.slice(4),prev=latestForDay(priorDay,until?priorDay+'T23:59:59Z':null);const curr=periodRain(chosenDay,'month',until),old=prev?.rain_month;
 $('compare').textContent=Number.isFinite(curr)&&Number.isFinite(old)?`Vorjahr bis ${priorDay.slice(5).replace('-','.')}.: ${fmt(old)} mm · ${fmt(curr-old)} mm (${old>0?fmt((curr-old)/old*100,0)+' %':'Prozentvergleich nicht möglich'})`:'Vorjahr: Keine vergleichbaren Stationsdaten';
 const wind=isToday?(live?.timestamp?.startsWith(chosenDay)?live:latestForDay(chosenDay)):null;
