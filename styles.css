@@ -12,3 +12,7 @@
 .temperature-card .temperature-meta{text-align:right}
 @media(max-width:360px){.temperature-card{padding:18px 14px}}
 @media(prefers-color-scheme:dark){.current-temperature .temperature-gauge{color:#e4edf4}.current-temperature .gauge-scale,.current-temperature .temperature-meta{color:#abbdd0}}
+
+.measurement-panel{padding:0;overflow:hidden}
+.measurement-controls{padding:19px}
+.measurement-panel>.temperature{margin-bottom:0;border-radius:0}
