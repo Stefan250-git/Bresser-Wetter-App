@@ -86,7 +86,7 @@ function updateTemperatureGauge(kind, value) {
   const fraction = available ? Math.max(0, Math.min(1, (value + 20) / 60)) : 0;
   gauge.dataset.empty = String(!available);
   const needle = $(kind+'-needle');
-  needle.setAttribute('transform', 'rotate('+fraction*180+' 160 155)');
+  needle.setAttribute('transform', 'rotate('+fraction*270+' 160 160)');
   needle.setAttribute('opacity', available ? '1' : '0');
   gauge.nextElementSibling.textContent = available ? fmt(value)+' \u00b0C' : 'Keine Temperaturmessung vorhanden';
 }
