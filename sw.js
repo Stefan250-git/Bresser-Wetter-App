@@ -1,5 +1,5 @@
 
-const CACHE = 'bresser-v3';
+const CACHE = 'bresser-v4';
 
 const STATIC = [
   './',
