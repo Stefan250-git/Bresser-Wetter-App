@@ -60,7 +60,17 @@ Die Tests vergleichen die Berechnung mit den [USNO-Referenzphasen für November/
 
 `node scripts/test-ui.cjs` prüft ohne zusätzliche Pakete den Stundenregler, Datumsnavigation, Messwertzuordnung, Offline-Aktualisierung, Windanzeige, Prognose und Service-Worker-Versionen. Der Test verwendet eine simulierte Oberfläche; die visuelle Darstellung und Touchbedienung müssen zusätzlich im Browser bzw. auf dem Smartphone geprüft werden.
 
-## Quellen
+## Rheinpegel Wesel
+
+Nach der Mondkarte erscheint der neueste Wasserstand der WSV-Messstelle Wesel (Rhein-km 814, Pegelnummer 2770040). Die Anzeige nennt Zentimeter über Pegelnull und den Messzeitpunkt in Berliner Zeit. Dies ist keine Wassertiefe.
+
+Die Einordnung Niedrig/Normal/Hoch übernimmt unverändert `stateMnwMhw` aus [PEGELONLINE](https://www.pegelonline.wsv.de/webservice/dokuRestapi): niedrig bei oder unter MNW, hoch bei oder über MHW und normal dazwischen. Fehlende Einordnung, gestörte Messstelle, veraltete Daten oder Abruffehler aktivieren keines der drei Bilder. Bei Abruffehlern bleibt ein bereits empfangener Wert ausdrücklich als letzter bekannter Messwert sichtbar.
+
+Abruf beim Start, beim manuellen Aktualisieren, bei Rückkehr zur App und alle zehn Minuten bei sichtbarer App. Gleichzeitige Anfragen werden zusammengefasst, erfolgreiche Abrufe für eine Minute wiederverwendet und hängende Anfragen nach zehn Sekunden abgebrochen. Pegeldaten werden nicht im Service Worker gespeichert. Die Tages-/Stundenauswahl beeinflusst den aktuellen Rheinpegel nicht.
+
+Die drei fotorealistischen Darstellungen sind KI-generierte Symbolbilder, keine aktuellen Aufnahmen. [Bild und Generierungs-Prompt](assets/README.md#rheinpegel-symbolbilder).
+
+## Weitere Quellen
 - https://weathercloud.net/de/faq (kein offizieller Abruf-API, 10-Minuten-Intervall)
 - https://github.com/MauroDruwel/Weathercloud (inoffizieller Python-Client)
 - https://open-meteo.com/en/docs (Forecast API)

@@ -1,13 +1,14 @@
 
-const CACHE = 'bresser-v26';
+const CACHE = 'bresser-v27';
 
 const STATIC = [
   './',
   './index.html',
-  './styles.css?v=26',
-  './app.js?v=26',
+  './styles.css?v=27',
+  './app.js?v=27',
   './icon.svg',
   './assets/moon-full-nasa.jpg',
+  './assets/rhine-levels.jpg',
   './manifest.webmanifest'
 ];
 
@@ -38,7 +39,8 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
   if (url.pathname.includes('/data/') ||
-      url.hostname.includes('open-meteo.com')) return;
+      url.hostname.includes('open-meteo.com') ||
+      url.hostname.endsWith('pegelonline.wsv.de')) return;
 
   event.respondWith(
     fetch(event.request)

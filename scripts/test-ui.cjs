@@ -49,7 +49,7 @@ function harness(code = source) {
     static now() { return Date.parse('2026-11-24T11:00:00Z'); }
   }
   const context = vm.createContext({
-    Intl: instrumentedIntl, Date: TestDate, Number, Math, Set, Map, WeakMap, URL,
+    Intl: instrumentedIntl, Date: TestDate, Number, Math, Set, Map, WeakMap, URL, AbortController,
     requestAnimationFrame(callback) { frames.set(++frameId, callback); return frameId; },
     cancelAnimationFrame(id) { frames.delete(id); },
     setTimeout(callback,delay) { timers.set(++timerId,{at:clock+delay,callback});return timerId; },
@@ -438,16 +438,74 @@ async function tests() {
   assert(html.indexOf('id="moon-title"')>html.indexOf('id="wind-time"'));
   assert(html.indexOf('id="moon-title"')<html.indexOf('>Ausblick'));
 
+  const river=harness();
+  const gauge={uuid:'f33c3cc9-dc4b-4b77-baa9-5a5f10704398',km:814,water:{shortname:'RHEIN'},timeseries:[{shortname:'W',unit:'cm',currentMeasurement:{value:405,timestamp:'2026-11-24T11:00:00+01:00',stateMnwMhw:'normal'}}]};
+  river.context.gauge=gauge;
+  for(const [state,label] of [['low','Niedrig'],['normal','Normal'],['high','Hoch']]) {
+    gauge.timeseries[0].currentMeasurement.stateMnwMhw=state;
+    river.run('riverReading=normalizeRiver(gauge);riverFailed=false;renderRiver()');
+    assert.equal(river.nodes.get('river-value').textContent,'405');
+    assert.equal(river.nodes.get('river-state').textContent,label);
+    for(const key of ['low','normal','high'])assert.equal(river.nodes.get('river-'+key).dataset.current,String(key===state));
+  }
+  for(const value of [0,-10]) {
+    gauge.timeseries[0].currentMeasurement.value=value;
+    assert.equal(river.run('normalizeRiver(gauge).value'),value,'Zero and negative gauge readings are valid');
+  }
+  for(const bad of [null,NaN,'405']) {
+    gauge.timeseries[0].currentMeasurement.value=bad;
+    assert.throws(()=>river.run('normalizeRiver(gauge)'));
+  }
+  gauge.timeseries[0].currentMeasurement.value=405;
+  for(const mutation of [g=>g.timeseries[0].unit='m',g=>g.uuid='other',g=>g.km=800,g=>g.timeseries[0].currentMeasurement.timestamp='invalid']) {
+    const invalid=structuredClone(gauge);mutation(invalid);river.context.invalidGauge=invalid;
+    assert.throws(()=>river.run('normalizeRiver(invalidGauge)'));
+  }
+  for(const state of ['unknown','commented','out-dated']) {
+    gauge.timeseries[0].currentMeasurement.stateMnwMhw=state;
+    assert.equal(river.run('riverStatus(normalizeRiver(gauge)).key'),'unknown');
+  }
+  gauge.timeseries[0].currentMeasurement.stateMnwMhw='normal';
+  for(const timestamp of ['2026-11-22T11:00:00Z','2026-11-25T11:00:00Z']) {
+    gauge.timeseries[0].currentMeasurement.timestamp=timestamp;
+    assert.equal(river.run('riverStatus(normalizeRiver(gauge)).key'),'unknown','Stale or future values have no active classification');
+  }
+  gauge.timeseries[0].currentMeasurement.timestamp='2026-11-24T11:00:00+01:00';
+  let resolveRiver,riverCalls=0;
+  river.context.fetch=()=>{riverCalls++;return new Promise(resolve=>{resolveRiver=resolve;});};
+  const pendingRiver=river.run('loadRiver()');
+  assert.equal(river.run('loadRiver(true)'),pendingRiver,'Concurrent requests share one fetch');
+  resolveRiver({ok:true,json:async()=>gauge});await pendingRiver;
+  assert.equal(river.nodes.get('river-normal').dataset.current,'true');
+  assert(river.nodes.get('river-time').textContent.includes('11:00'),'Measurement time uses Berlin timezone');
+  await river.run('loadRiver()');assert.equal(riverCalls,1,'Resume does not refetch immediately');
+  river.context.fetch=async()=>{throw Error('offline');};
+  await river.run('loadRiver(true)');
+  assert.equal(river.nodes.get('river-value').textContent,'405','Failed refresh preserves last known reading');
+  assert.equal(river.nodes.get('river-normal').dataset.current,'false','Failed refresh cannot claim a current classification');
+  assert(river.nodes.get('river-time').textContent.startsWith('Letzter bekannter'));
+  river.context.fetch=(url,options)=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(Error('timeout'))));
+  const timeoutRiver=river.run('loadRiver(true)');river.advance(10000);await timeoutRiver;
+  assert.equal(river.nodes.get('river-panel').attributes['aria-busy'],'false','Timed-out requests release the loading state');
+  assert(html.indexOf('id="river-title"')>html.indexOf('id="moon-title"'));
+  assert(html.indexOf('id="river-title"')<html.indexOf('>Ausblick'));
+
   const listeners={},deleted=[];
   const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');
   const version=sw.match(/const CACHE = '([^']+)'/)[1];
   vm.runInNewContext(sw,{
+    URL,
     self:{addEventListener(name,callback){listeners[name]=callback;},clients:{claim:async()=>{} }},
     caches:{keys:async()=>['bresser-v1',version,'other-app-cache'],delete:async key=>deleted.push(key)}
   });
   let activation;
   listeners.activate({waitUntil(promise){activation=promise;}});await activation;
   assert.deepEqual(deleted,['bresser-v1'],'Only obsolete weather-app caches are deleted');
+  let riverIntercepted=false;
+  listeners.fetch({request:{method:'GET',url:'https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/WESEL.json'},respondWith(){riverIntercepted=true;}});
+  assert.equal(riverIntercepted,false,'Official gauge requests bypass the service-worker cache');
+  assert(sw.includes('./assets/rhine-levels.jpg'));
+  assert(fs.statSync(path.join(root,'assets/rhine-levels.jpg')).size>0);
   for(const name of ['app.js','styles.css']) {
     const asset=html.match(new RegExp(name.replace('.','\\.')+'\\?v=\\d+'))[0];
     assert(sw.includes(asset),'Service worker and HTML asset versions match');

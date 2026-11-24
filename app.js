@@ -106,7 +106,7 @@ $('hour-ruler').onpointerdown=$('hour').onpointerdown;
 $('hour-ruler').oncontextmenu=$('hour').oncontextmenu;
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){endHourPress();stopCompassSway();}
-  else { renderMoon();renderCurrentWeather();forecast(); }
+  else { renderMoon();renderCurrentWeather();forecast();loadRiver(); }
 });
 $('hour').oninput = event => {
   if (hourPress) { updateHourControl();return; }
@@ -124,10 +124,64 @@ $('prev').onclick=()=>changeDate(addDay(chosenDay,-1));$('next').onclick=()=>cha
 $('refresh').onclick = async () => {
   if ($('refresh').disabled) return;
   $('refresh').disabled=true;$('refresh').setAttribute('aria-busy','true');
-  try { await Promise.all([loadRelevant(true),forecast()]);render(); }
+  try { await Promise.all([loadRelevant(true),forecast(),loadRiver(true)]);render(); }
   finally { $('refresh').disabled=false;$('refresh').setAttribute('aria-busy','false'); }
 };
 async function fetchJson(path){const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);return await r.json()}
+const RIVER_UUID='f33c3cc9-dc4b-4b77-baa9-5a5f10704398';
+const RIVER_URL='https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/'+RIVER_UUID+'.json?includeTimeseries=true&includeCurrentMeasurement=true';
+let riverReading=null,riverFailed=false,riverPending=null,riverFetchedAt=0;
+function normalizeRiver(data) {
+  const series=data?.timeseries?.find(series=>series.shortname==='W');
+  const reading=series?.currentMeasurement;
+  if(data?.uuid!==RIVER_UUID || data?.water?.shortname!=='RHEIN' || data?.km!==814 ||
+      series?.unit!=='cm' || !Number.isFinite(reading?.value) ||
+      typeof reading?.timestamp!=='string' || !Number.isFinite(Date.parse(reading.timestamp))) {
+    throw Error('Ungültige Pegeldaten für Wesel');
+  }
+  return {value:reading.value,timestamp:reading.timestamp,state:reading.stateMnwMhw};
+}
+function riverStatus(reading,failed=false,now=Date.now()) {
+  if(failed)return {key:'unknown',label:'Abruf fehlgeschlagen'};
+  if(!reading)return {key:'unknown',label:'Nicht verfügbar'};
+  const age=now-Date.parse(reading.timestamp);
+  if(reading.state==='commented')return {key:'unknown',label:'Messstelle gestört'};
+  if(reading.state==='out-dated' || age>25*60*60*1000)return {key:'unknown',label:'Messwert veraltet'};
+  if(age < -15*60*1000)return {key:'unknown',label:'Messzeitpunkt unklar'};
+  const labels={low:'Niedrig',normal:'Normal',high:'Hoch'};
+  return {key:labels[reading.state]?reading.state:'unknown',label:labels[reading.state]||'Einordnung unbekannt'};
+}
+function renderRiver() {
+  const status=riverStatus(riverReading,riverFailed);
+  $('river-panel').dataset.level=status.key;
+  $('river-value').textContent=fmt(riverReading?.value,0);
+  $('river-state').textContent=status.label;
+  for(const key of ['low','normal','high']) {
+    $('river-'+key).dataset.current=String(status.key===key);
+    $('river-'+key).setAttribute('aria-label',({low:'Niedrig',normal:'Normal',high:'Hoch'})[key]+(status.key===key?' – aktueller Zustand':''));
+  }
+  $('river-time').textContent=riverReading?
+    (riverFailed?'Letzter bekannter Messwert: ':'Messung: ')+readingFormatter.format(new Date(riverReading.timestamp))+' Uhr':
+    'Keine aktuellen Pegeldaten verfügbar';
+}
+function loadRiver(force=false) {
+  if(riverPending)return riverPending;
+  if(!force && riverFetchedAt && Date.now()-riverFetchedAt>=0 && Date.now()-riverFetchedAt<60000) {
+    renderRiver();return Promise.resolve();
+  }
+  $('river-panel').setAttribute('aria-busy','true');
+  riverPending=(async()=>{
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),10000);
+    try {
+      const response=await fetch(RIVER_URL,{cache:'no-store',signal:controller.signal});
+      if(!response.ok)throw Error('HTTP '+response.status);
+      riverReading=normalizeRiver(await response.json());riverFailed=false;riverFetchedAt=Date.now();
+    } catch { riverFailed=true; }
+    finally { clearTimeout(timeout);renderRiver();$('river-panel').setAttribute('aria-busy','false'); }
+  })().finally(()=>{riverPending=null;});
+  return riverPending;
+}
 const pendingMonths = new Map();
 let dataRequest = 0;
 async function loadMonth(month,force=false) {
@@ -485,7 +539,7 @@ function forecast(){
 }
 async function loadForecast(){try{const url=new URL('https://api.open-meteo.com/v1/forecast');Object.entries({latitude:LAT,longitude:LON,timezone:TZ,forecast_days:4,wind_speed_unit:'kmh',current:'weather_code,is_day,wind_speed_10m,wind_gusts_10m',daily:'temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max'}).forEach(([k,v])=>url.searchParams.set(k,v));const x=await fetchJson(url);currentWeather=normalizeCurrentWeather(x);renderCurrentWeather();const d=x.daily,days=[1,2,3].map(i=>({date:d.time[i],min:d.temperature_2m_min[i],max:d.temperature_2m_max[i],rain:d.precipitation_sum[i],p:d.precipitation_probability_max[i],gust:d.wind_gusts_10m_max[i]}));if(days.some(x=>!x.date))throw Error('Unvollständige Prognose');const start=(d.temperature_2m_max[0]+d.temperature_2m_min[0])/2,end=(days[2].max+days[2].min)/2,diff=end-start;const trend=Math.abs(diff)<2?'Die Temperaturen bleiben ungefähr gleich.':diff>0?'Die Temperaturen werden voraussichtlich steigen.':'Die Temperaturen werden voraussichtlich sinken.';const rain=days.filter(x=>(x.rain??0)>=0.5||(x.p??0)>=60);const windy=days.filter(x=>(x.gust??0)>=50);const entries=[['Temperatur',trend],['Niederschlag',rain.length?`Niederschlag an ${rain.map(x=>new Date(x.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'short'})).join(', ')} erwartet.`:'Derzeit kein nennenswerter Niederschlag prognostiziert.'],['Wind / Sturm',windy.length?`Erhöhte Windböen möglich (bis ${fmt(Math.max(...windy.map(x=>x.gust)),0)} km/h).`:'Derzeit keine stärkeren Windböen prognostiziert.']];$('forecast').replaceChildren();for(const [name,description]of entries){let n=document.createElement('div');n.className='forecast-item';let b=document.createElement('strong');b.textContent=name;let p=document.createElement('p');p.textContent=description;n.append(b,p);$('forecast').append(n)}}catch(e){renderCurrentWeather();$('forecast').textContent='Prognose derzeit nicht verfügbar.'}}
 setupCompassObserver();
-if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});updateHourControl();renderMoon();loadRelevant().then(render);forecast();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});updateHourControl();renderMoon();loadRelevant().then(render);forecast();loadRiver();
 
 // Keep the current-weather icon fresh without polling while the app is hidden.
-setInterval(()=>{if(!document.hidden){renderMoon();forecast();}},10*60*1000);
+setInterval(()=>{if(!document.hidden){renderMoon();forecast();loadRiver();}},10*60*1000);
