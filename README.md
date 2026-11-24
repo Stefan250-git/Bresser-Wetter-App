@@ -4,7 +4,7 @@ Mobile App für die öffentliche Weathercloud-Station `d1073176104` (46499, NRW)
 
 ## Enthalten
 - Aktuelle und historische Messwerte: Temperatur, bedingte gefühlte Temperatur, Niederschlagsintensität, Tages-/Wochen-/Monatssummen, Vorjahresvergleich, heutiger Wind und Richtung
-- Vier veränderbare Messzeiten (standardmäßig 06:00, 12:00, 18:00 und Tagesende 24:00) mit Datumsauswahl
+- Datumsauswahl und Stundenregler von 00:00 bis zum Tagesende (24:00), standardmäßig 12:00 Uhr
 - Drei-Tage-Ausblick über Open-Meteo, getrennt von eigenen Stationsmessungen
 - PWA zur Installation auf iOS und Android
 - Archivsammler als GitHub Action alle 10 Minuten (Best-Effort, nicht minutengenau garantiert)
@@ -20,7 +20,7 @@ Mobile App für die öffentliche Weathercloud-Station `d1073176104` (46499, NRW)
 ## Einschränkungen / technische Genauigkeit
 - Weathercloud bietet **keine offizielle öffentliche Abruf-API**. Der Sammler verwendet die inoffizielle, rückentwickelte Open-Source-Bibliothek `weathercloud` (MauroDruwel), deren Schnittstellen sich ändern können. Ohne erfolgreiche Action bleibt das Dashboard leer.
 - GitHub Actions `schedule` kann verzögert werden oder einzelne Läufe auslassen. Verpasste Werte werden nicht erfunden. Historie entsteht ab dem ersten erfolgreichen Sammellauf.
-- Für jede der vier Messzeiten wird eine Messung maximal 20 Minuten entfernt gewählt; sonst erscheint eine Lücke.
+- Für jede der gewählten vollen Stunden wird eine Messung maximal 20 Minuten entfernt gewählt; sonst erscheint eine Lücke.
 - Historische „gefühlte Temperatur“ nur, wenn Weathercloud Windchill bei kalten oder Heatindex bei warmen Bedingungen liefert; andernfalls `—`. Eine allgemein gültige gefühlte Temperatur kann damit nicht immer bereitgestellt werden.
 - „Regen aktuell“ ist Niederschlagsintensität in mm/h, nicht kumulierte mm. Tages-/Monatssummen kommen von den Weathercloud-Statistiken. Für die Wochensumme müssen für jeden Tag dieser Woche aufgezeichnete Tageswerte vorhanden sein; bei fehlenden Tagen erscheint `—`.
 - Bei noch laufenden Tagen sind Summen Zwischenstände. Ein Vorjahresvergleich zeigt nur echte Vorjahres-Stationswerte, keine modellierten Daten.

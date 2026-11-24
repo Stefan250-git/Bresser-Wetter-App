@@ -5,21 +5,29 @@ const dateBerlin=()=>new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric'
 const isoDay=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
 const addDay=(s,n)=>{const d=new Date(s+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
 const yearMonth=s=>s.slice(0,7),range=(a,b)=>{const out=[];for(let d=a;d<=b;d=addDay(d,1))out.push(d);return out};
-let times=JSON.parse(localStorage.getItem('bresser-times')||'null')||['06:00','12:00','18:00','24:00'];
-let chosenDay=dateBerlin(),chosenSlot=1,archive={},loaded=new Set(),live=null;
+let chosenDay=dateBerlin(),chosenHour=12,archive={},loaded=new Set(),live=null;
 $('date').value=chosenDay;$('date').max=dateBerlin();
-function slots(){ $('slots').replaceChildren(); times.forEach((t,i)=>{const b=document.createElement('button');b.className='slot'+(chosenSlot===i?' active':'');b.innerHTML=`<strong>${t}</strong><span>${['Morgens','Mittags','Abends','Nachts'][i]}</span>`;b.onclick=()=>{chosenSlot=i;slots();render()};$('slots').appendChild(b)}); }
+const hourTime = hour => String(hour).padStart(2,'0')+':00';
+const hourLabel = hour => hour === 24 ? '00:00 Uhr (Tagesende)' : hourTime(hour)+' Uhr';
+function updateHourControl() {
+  $('hour').value = String(chosenHour);
+  $('hour').setAttribute('aria-valuetext', hourLabel(chosenHour));
+  $('hour-value').textContent = hourLabel(chosenHour);
+}
+function selectHour(value) {
+  const hour = Number(value);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 24) return;
+  chosenHour = hour;
+  render();
+}
+$('hour').oninput = event => selectHour(event.target.value);
 function changeDate(v){if(!v||v>dateBerlin())return;chosenDay=v;$('date').value=v;$('next').disabled=v>=dateBerlin();loadRelevant().then(render)}
 $('prev').onclick=()=>changeDate(addDay(chosenDay,-1));$('next').onclick=()=>changeDate(addDay(chosenDay,1));$('date').onchange=e=>changeDate(e.target.value);
 $('refresh').onclick=()=>loadRelevant(true).then(render);
-$('settings-toggle').onclick=()=>{const s=$('settings');s.hidden=!s.hidden;$('settings-toggle').setAttribute('aria-expanded',String(!s.hidden))};
-function setup(){const e=$('time-config');e.replaceChildren();times.forEach((t,i)=>{const l=document.createElement('label');l.textContent=['Morgens','Mittags','Abends','Nachts'][i];const input=document.createElement('input');input.type='time';input.value=t==='24:00'?'00:00':t;input.id='time'+i;l.append(input);e.append(l)})}
-$('save-times').onclick=()=>{const arr=[0,1,2,3].map(i=>$('time'+i).value).map((t,i)=>i===3&&t==='00:00'?'24:00':t);if(arr.some(t=>!t)||arr.some((t,i)=>i>0&&t<=arr[i-1])){alert('Zeiten müssen chronologisch aufsteigend sein. Für Nachts ist 00:00 (entspricht 24:00) möglich.');return}times=arr;localStorage.setItem('bresser-times',JSON.stringify(times));slots();render()};
-$('reset-times').onclick=()=>{times=['06:00','12:00','18:00','24:00'];localStorage.removeItem('bresser-times');setup();slots();render()};
 async function fetchJson(path){const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);return await r.json()}
 async function loadMonth(month,force=false){if(loaded.has(month)&&!force)return;try{const data=await fetchJson(`data/${month}.json`);archive[month]=Array.isArray(data)?data:[];loaded.add(month)}catch(e){archive[month]=[];loaded.add(month)}}
 function formatUpdated(timestamp){const dt=new Date(timestamp);if(Number.isNaN(dt.getTime()))return 'Zeitpunkt unbekannt';const parts=new Intl.DateTimeFormat('en-GB',{timeZone:TZ,day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(dt);const v=Object.fromEntries(parts.map(p=>[p.type,p.value]));return `${v.day}/${v.month}/${v.year} ${v.hour}:${v.minute}`;}
-async function loadRelevant(force=false){const weekDay=(new Date(chosenDay+'T12:00:00Z').getUTCDay()+6)%7;const weekStart=addDay(chosenDay,-weekDay);let months=new Set([yearMonth(chosenDay),yearMonth(addDay(chosenDay,1)),yearMonth(weekStart),yearMonth(chosenDay.replace(/^\d{4}/,String(+chosenDay.slice(0,4)-1)))]);await Promise.all([...months].map(m=>loadMonth(m,force)));try{live=await fetchJson('data/latest.json')}catch(e){live=null}if(!live&&!Object.values(archive).some(x=>x.length))$('status').textContent='Keine Messdaten archiviert · Messwertsammler noch nicht eingerichtet';else $('status').textContent=live?.timestamp?'Zuletzt aktualisiert: '+formatUpdated(live.timestamp):'Archivdaten geladen · kein aktueller Zeitstempel';}
+async function loadRelevant(force=false){const weekDay=(new Date(chosenDay+'T12:00:00Z').getUTCDay()+6)%7;const weekStart=addDay(chosenDay,-weekDay);let months=new Set([yearMonth(chosenDay),yearMonth(addDay(chosenDay,-1)),yearMonth(addDay(chosenDay,1)),yearMonth(weekStart),yearMonth(chosenDay.replace(/^\d{4}/,String(+chosenDay.slice(0,4)-1)))]);await Promise.all([...months].map(m=>loadMonth(m,force)));try{live=await fetchJson('data/latest.json')}catch(e){live=null}if(!live&&!Object.values(archive).some(x=>x.length))$('status').textContent='Keine Messdaten archiviert · Messwertsammler noch nicht eingerichtet';else $('status').textContent=live?.timestamp?'Zuletzt aktualisiert: '+formatUpdated(live.timestamp):'Archivdaten geladen · kein aktueller Zeitstempel';}
 function records(month){return archive[month]||[]}
 function recordsForDay(day){return records(yearMonth(day)).filter(r=>r.timestamp&&new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(r.timestamp))===day)}
 
@@ -28,9 +36,11 @@ function nearest(day, time) {
     ? 1440
     : Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
 
+  const prevDay = addDay(day, -1);
   const nextDay = addDay(day, 1);
 
   const candidates = [
+    ...recordsForDay(prevDay),
     ...recordsForDay(day),
     ...recordsForDay(nextDay)
   ];
@@ -58,12 +68,12 @@ function nearest(day, time) {
 
     const localDay = `${p.year}-${p.month}-${p.day}`;
 
-    if (localDay !== day && localDay !== nextDay) continue;
+    if (localDay !== prevDay && localDay !== day && localDay !== nextDay) continue;
 
     const minutes =
       Number(p.hour) * 60 +
       Number(p.minute) +
-      (localDay === nextDay ? 1440 : 0);
+      (localDay === nextDay ? 1440 : localDay === prevDay ? -1440 : 0);
 
     const difference = Math.abs(minutes - targetMinutes);
 
@@ -120,7 +130,7 @@ function updateTemperatureGauge(kind, value) {
 }
 
 function render(){
-  slots();
+  updateHourControl();
 
   $('current-temp').textContent = fmt(live?.temperature).replace(',', '.');
   updateTemperatureGauge('current', live?.temperature);
@@ -128,8 +138,8 @@ function render(){
   $('current-time').textContent = live?.timestamp
     ? 'Messpunkt: ' + formatUpdated(live.timestamp) + ' Uhr'
     : 'Noch keine aktuelle Messung';
-const isToday=chosenDay===dateBerlin();const time=times[chosenSlot],r=nearest(chosenDay,time),until=r?.timestamp;
-$('selected-time').textContent = new Date(chosenDay+'T12:00:00Z').toLocaleDateString('de-DE', {timeZone:TZ, day:'2-digit', month:'2-digit', year:'numeric'}) + ' · ' + time + ' Uhr';
+const isToday=chosenDay===dateBerlin();const time=hourTime(chosenHour),r=nearest(chosenDay,time),until=r?.timestamp;
+$('selected-time').textContent = new Date(chosenDay+'T12:00:00Z').toLocaleDateString('de-DE', {timeZone:TZ, day:'2-digit', month:'2-digit', year:'numeric'}) + ' · ' + hourLabel(chosenHour);
 updateTemperatureGauge('selected', r?.temperature);
 $('selected-hint').textContent=r?'Messwert am gewählten Zeitpunkt (±20 Minuten)':'Keine Stationsmessung zu dieser Uhrzeit (±20 Minuten).';$('temp').textContent=fmt(r?.temperature).replace(',', '.');$('feels').textContent=fmt(r?.feels);$('reading-time').textContent=r?'Gemessen: '+new Date(r.timestamp).toLocaleString('de-DE',{timeZone:TZ,dateStyle:'short',timeStyle:'short'}):'Keine Messung vorhanden';$('rainrate').textContent=fmt(r?.rain_rate);$('rainday').textContent=fmt(periodRain(chosenDay,'day',until));$('rainweek').textContent=fmt(periodRain(chosenDay,'week',until));$('rainmonth').textContent=fmt(periodRain(chosenDay,'month',until));
 const priorDay=(+chosenDay.slice(0,4)-1)+chosenDay.slice(4),prev=latestForDay(priorDay,until?priorDay+'T23:59:59Z':null);const curr=periodRain(chosenDay,'month',until),old=prev?.rain_month;
@@ -138,4 +148,4 @@ const wind=isToday?(live?.timestamp?.startsWith(chosenDay)?live:latestForDay(cho
 renderWind(wind);
 }
 async function forecast(){try{const url=new URL('https://api.open-meteo.com/v1/forecast');Object.entries({latitude:LAT,longitude:LON,timezone:TZ,forecast_days:4,daily:'temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max'}).forEach(([k,v])=>url.searchParams.set(k,v));const x=await fetchJson(url),d=x.daily,days=[1,2,3].map(i=>({date:d.time[i],min:d.temperature_2m_min[i],max:d.temperature_2m_max[i],rain:d.precipitation_sum[i],p:d.precipitation_probability_max[i],gust:d.wind_gusts_10m_max[i]}));if(days.some(x=>!x.date))throw Error('Unvollständige Prognose');const start=(d.temperature_2m_max[0]+d.temperature_2m_min[0])/2,end=(days[2].max+days[2].min)/2,diff=end-start;const trend=Math.abs(diff)<2?'Die Temperaturen bleiben ungefähr gleich.':diff>0?'Die Temperaturen werden voraussichtlich steigen.':'Die Temperaturen werden voraussichtlich sinken.';const rain=days.filter(x=>(x.rain??0)>=0.5||(x.p??0)>=60);const windy=days.filter(x=>(x.gust??0)>=50);const entries=[['Temperatur',trend],['Niederschlag',rain.length?`Niederschlag an ${rain.map(x=>new Date(x.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'short'})).join(', ')} erwartet.`:'Derzeit kein nennenswerter Niederschlag prognostiziert.'],['Wind / Sturm',windy.length?`Erhöhte Windböen möglich (bis ${fmt(Math.max(...windy.map(x=>x.gust)),0)} km/h).`:'Derzeit keine stärkeren Windböen prognostiziert.']];$('forecast').replaceChildren();for(const [name,description]of entries){let n=document.createElement('div');n.className='forecast-item';let b=document.createElement('strong');b.textContent=name;let p=document.createElement('p');p.textContent=description;n.append(b,p);$('forecast').append(n)}}catch(e){$('forecast').textContent='Prognose derzeit nicht verfügbar.'}}
-if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});setup();slots();loadRelevant().then(render);forecast();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});updateHourControl();loadRelevant().then(render);forecast();

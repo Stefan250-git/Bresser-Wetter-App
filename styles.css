@@ -26,3 +26,12 @@
 .windsock-level[data-active="true"]{color:#a32735;background:#fff0f1;border-color:#dc7180;font-weight:750}
 .windsock-level[data-active="true"] svg{opacity:1}
 @media(prefers-color-scheme:dark){.wind-compass{color:#c0d8ed}.windsock-level{color:#abbdd0}.windsock-level[data-active="true"]{color:#ffcad0;background:#482c36;border-color:#cb7e8a}}
+
+.hour-picker{margin-top:18px}
+.hour-heading{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.hour-heading label{font-size:.875rem;color:#60748b}
+.hour-heading output{font-size:1.25rem;font-weight:750;font-variant-numeric:tabular-nums}
+.hour-slider{display:block;width:100%;min-width:0;min-height:44px;margin:6px 0 0;cursor:pointer;accent-color:#234665}
+.hour-slider:focus-visible{outline:3px solid #438dc6;outline-offset:3px;border-radius:6px}
+.hour-ruler{display:flex;justify-content:space-between;font-size:.8125rem;color:#60748b;font-variant-numeric:tabular-nums}
+@media(prefers-color-scheme:dark){.hour-heading label,.hour-ruler{color:#abbdd0}.hour-slider{accent-color:#a5cee9}}
