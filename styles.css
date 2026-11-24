@@ -40,3 +40,7 @@
 .hour-ruler span{position:absolute;transform:translateX(-50%);white-space:nowrap}
 .hour-ruler span::before{content:"";position:absolute;left:50%;top:-8px;width:2px;height:6px;background:currentColor}
 @media(prefers-color-scheme:dark){.hour-ruler{color:#abbdd0}.hour-thumb-value{color:#122945}.hour-slider::-webkit-slider-runnable-track{background:#446079}.hour-slider::-webkit-slider-thumb{background:#a5cee9;border-color:#192b3e}.hour-slider::-moz-range-track{background:#446079}.hour-slider::-moz-range-thumb{background:#a5cee9;border-color:#192b3e}}
+
+.date-nav{grid-template-columns:44px minmax(0,1fr) 44px}.date-nav input{min-width:0;font-size:16px}.date-nav button{min-height:44px}.icon-button{flex-shrink:0}.icon-button:disabled,.date-nav button:disabled{opacity:.45;cursor:default}button:focus-visible{outline:3px solid #438dc6;outline-offset:3px}.hour-slider{touch-action:pan-y}.hint{font-size:.8125rem}
+
+.measurement-controls .hint{min-height:3em}

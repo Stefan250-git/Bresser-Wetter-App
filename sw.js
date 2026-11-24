@@ -1,11 +1,11 @@
 
-const CACHE = 'bresser-v16';
+const CACHE = 'bresser-v17';
 
 const STATIC = [
   './',
   './index.html',
-  './styles.css?v=16',
-  './app.js?v=16',
+  './styles.css?v=17',
+  './app.js?v=17',
   './icon.svg',
   './manifest.webmanifest'
 ];
@@ -22,7 +22,7 @@ self.addEventListener('activate', event => {
     Promise.all([
       caches.keys().then(keys =>
         Promise.all(
-          keys.filter(key => key !== CACHE)
+          keys.filter(key => key.startsWith('bresser-') && key !== CACHE)
               .map(key => caches.delete(key))
         )
       ),

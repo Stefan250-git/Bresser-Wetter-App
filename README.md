@@ -33,6 +33,10 @@ Mobile App für die öffentliche Weathercloud-Station `d1073176104` (46499, NRW)
 ## Lokaler Test
 `python -m http.server 8000` im Projektverzeichnis, dann http://localhost:8000 öffnen. Ohne laufenden Datensammler werden lediglich die Vorhersagen angezeigt.
 
+## Bedienlogik prüfen
+
+`node scripts/test-ui.cjs` prüft ohne zusätzliche Pakete den Stundenregler, Datumsnavigation, Messwertzuordnung, Offline-Aktualisierung, Windanzeige, Prognose und Service-Worker-Versionen. Der Test verwendet eine simulierte Oberfläche; die visuelle Darstellung und Touchbedienung müssen zusätzlich im Browser bzw. auf dem Smartphone geprüft werden.
+
 ## Quellen
 - https://weathercloud.net/de/faq (kein offizieller Abruf-API, 10-Minuten-Intervall)
 - https://github.com/MauroDruwel/Weathercloud (inoffizieller Python-Client)
