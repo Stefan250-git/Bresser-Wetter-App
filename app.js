@@ -12,7 +12,9 @@ const hourLabel = hour => hour === 24 ? '24:00 Uhr (Tagesende)' : hourTime(hour)
 function updateHourControl() {
   $('hour').value = String(chosenHour);
   $('hour').setAttribute('aria-valuetext', hourLabel(chosenHour));
-  $('hour-value').textContent = hourTime(chosenHour)+' Uhr';
+  $('hour-value').textContent = String(chosenHour);
+  $('hour-control').style.setProperty('--hour-position', (chosenHour / 24 * 100)+'%');
+  $('hour-control').style.setProperty('--hour-offset', (28 - chosenHour / 24 * 56)+'px');
 }
 function selectHour(value) {
   const hour = Number(value);
