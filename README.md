@@ -34,6 +34,12 @@ Mobile App für die öffentliche Weathercloud-Station `d1073176104` (46499, NRW)
 ## Lokaler Test
 `python -m http.server 8000` im Projektverzeichnis, dann http://localhost:8000 öffnen. Ohne laufenden Datensammler werden lediglich die Vorhersagen angezeigt.
 
+## Aktuelles Wettersymbol
+
+Das Symbol in der aktuellen Temperaturkarte verwendet frische Stationsdaten für Regen und Wind und ergänzend die aktuellen WMO-Wettercodes von [Open-Meteo](https://open-meteo.com/en/docs) für Sonne, Wolken, Schnee, Nebel und Gewitter. Quelle und Zeitpunkt stehen im Tooltip und im zugänglichen Namen. Daten älter als eine Stunde werden nicht als aktuelles Wetter verwendet. Bei trockener Station und modelliertem Regen lautet die Anzeige „Regen möglich“. Schnee wird nicht allein aus einer niedrigen Temperatur abgeleitet. Nachts erscheint bei klarem Himmel ein Mond.
+
+Aktuelles Wetter und Ausblick nutzen eine gemeinsame Anfrage, werden bei manueller Aktualisierung sowie alle zehn Minuten bei sichtbarer App erneuert. Animationen beachten die Systemeinstellung für reduzierte Bewegung.
+
 ## Bedienlogik prüfen
 
 `node scripts/test-ui.cjs` prüft ohne zusätzliche Pakete den Stundenregler, Datumsnavigation, Messwertzuordnung, Offline-Aktualisierung, Windanzeige, Prognose und Service-Worker-Versionen. Der Test verwendet eine simulierte Oberfläche; die visuelle Darstellung und Touchbedienung müssen zusätzlich im Browser bzw. auf dem Smartphone geprüft werden.

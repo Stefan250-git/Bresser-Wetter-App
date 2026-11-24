@@ -16,6 +16,7 @@ const isoDay=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d
 const addDay=(s,n)=>{const d=new Date(s+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
 const yearMonth=s=>s.slice(0,7),range=(a,b)=>{const out=[];for(let d=a;d<=b;d=addDay(d,1))out.push(d);return out};
 let chosenDay=dateBerlin(),chosenHour=12,archive={},loaded=new Set(),live=null;
+let currentWeather=null;
 $('date').value=chosenDay;$('date').max=dateBerlin();$('next').disabled=true;
 const hourTime = hour => String(hour).padStart(2,'0')+':00';
 const hourLabel = hour => hour === 24 ? '24:00 Uhr (Tagesende)' : hourTime(hour)+' Uhr';
@@ -103,7 +104,10 @@ $('hour').onclick=event=>event.preventDefault();
 $('hour').oncontextmenu=event=>event.preventDefault();
 $('hour-ruler').onpointerdown=$('hour').onpointerdown;
 $('hour-ruler').oncontextmenu=$('hour').oncontextmenu;
-document.addEventListener('visibilitychange',()=>{if(document.hidden)endHourPress();});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden)endHourPress();
+  else { renderCurrentWeather();forecast(); }
+});
 $('hour').oninput = event => {
   if (hourPress) { updateHourControl();return; }
   selectHour(event.target.value);
@@ -120,7 +124,7 @@ $('prev').onclick=()=>changeDate(addDay(chosenDay,-1));$('next').onclick=()=>cha
 $('refresh').onclick = async () => {
   if ($('refresh').disabled) return;
   $('refresh').disabled=true;$('refresh').setAttribute('aria-busy','true');
-  try { await loadRelevant(true);render(); }
+  try { await Promise.all([loadRelevant(true),forecast()]);render(); }
   finally { $('refresh').disabled=false;$('refresh').setAttribute('aria-busy','false'); }
 };
 async function fetchJson(path){const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);return await r.json()}
@@ -244,6 +248,59 @@ function renderWind(wind) {
   $('wind-time').textContent=wind?.timestamp?'Messung: '+new Date(wind.timestamp).toLocaleString('de-DE',{timeZone:TZ,timeStyle:'short'}):'Keine aktuelle Windmessung';
 }
 
+// Current WMO codes: https://open-meteo.com/en/docs#weathervariables
+const snowCodes=new Set([71,73,75,77,85,86]);
+const rainCodes=new Set([51,53,55,56,57,61,63,65,66,67,80,81,82]);
+const iceCodes=new Set([56,57,66,67]);
+function normalizeCurrentWeather(data) {
+  const current=data?.current;
+  if(!Number.isInteger(current?.weather_code) || ![0,1].includes(current?.is_day))return null;
+  let time;
+  if(typeof current.time==='number')time=current.time*1000;
+  else if(typeof current.time==='string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(current.time))time=Date.parse(current.time);
+  else if(typeof current.time==='string' && Number.isFinite(data.utc_offset_seconds))time=Date.parse(current.time+'Z')-data.utc_offset_seconds*1000;
+  if(!Number.isFinite(time))return null;
+  return {code:current.weather_code,isDay:current.is_day===1,time,wind:current.wind_speed_10m,gusts:current.wind_gusts_10m};
+}
+function weatherState(station=live,model=currentWeather,now=Date.now()) {
+  const recent=time=>Number.isFinite(time)&&time>=now-60*60*1000&&time<=now+15*60*1000;
+  const stationTime=Date.parse(station?.timestamp),hasStation=recent(stationTime),hasModel=recent(model?.time);
+  const result=(kind,label,source,time)=>({kind,label,source,time});
+  const modeled=(kind,label)=>result(kind,label,'Open-Meteo (modellbasiert)',model.time);
+  if(hasStation && station.wind_speed>=75)return result('storm',station.wind_speed>=118?'Orkan':'Es st\u00fcrmt','Station',stationTime);
+  if(hasModel && [95,96,97,99].includes(model.code))return modeled('thunder','Gewitter');
+  if(hasStation && station.rain_rate>0) {
+    if(hasModel && snowCodes.has(model.code))return result('snow','Es schneit','Station + Open-Meteo (Niederschlagsart modellbasiert)',model.time);
+    if(hasModel && iceCodes.has(model.code))return result('ice','Gefrierender Regen','Station + Open-Meteo (Niederschlagsart modellbasiert)',model.time);
+    return result('rain','Es regnet','Station',stationTime);
+  }
+  // A rain gauge alone cannot identify snowfall or sunshine.
+  if(hasModel && snowCodes.has(model.code))return modeled('snow','Es schneit');
+  if(hasStation && station.wind_speed>=62)return result('storm','St\u00fcrmisch','Station',stationTime);
+  if(hasModel && (model.wind>=75 || model.gusts>=75))return modeled('storm',model.wind>=75?'Es st\u00fcrmt':'Sturmb\u00f6en');
+  if(hasModel) {
+    if(iceCodes.has(model.code))return modeled('ice','Gefrierender Regen');
+    if(rainCodes.has(model.code)) {
+      if(hasStation && station.rain_rate===0)return modeled('rain','Regen m\u00f6glich');
+      return modeled([51,53,55].includes(model.code)?'drizzle':'rain',[51,53,55].includes(model.code)?'Es nieselt':'Es regnet');
+    }
+    if([45,48].includes(model.code))return modeled('fog','Es ist neblig');
+    if([0,1].includes(model.code))return modeled(model.isDay?'sun':'moon',model.isDay?'Sonnig':'Klarer Himmel');
+    if(model.code===2)return modeled(model.isDay?'partly':'partly-night','Leicht bew\u00f6lkt');
+    if(model.code===3)return modeled('cloudy','Bew\u00f6lkt');
+  }
+  if(hasStation && station.wind_speed>=39)return result('storm','Starker Wind','Station',stationTime);
+  return result('unknown','Keine Wetterdaten','Wetterzustand nicht verf\u00fcgbar',null);
+}
+function renderCurrentWeather() {
+  const state=weatherState();
+  const info=state.label+' \u00b7 '+state.source+(Number.isFinite(state.time)?' \u00b7 '+readingFormatter.format(new Date(state.time)):'');
+  $('current-weather').dataset.weather=state.kind;
+  $('current-weather').setAttribute('aria-label',info);
+  $('current-weather').setAttribute('title',info);
+  $('current-weather-label').textContent=state.label;
+}
+
 // Fixed Celsius scale shared by both speedometers; numeric values remain exact.
 function updateTemperatureGauge(kind, value) {
   const gauge = $(kind+'-gauge');
@@ -265,6 +322,7 @@ const priorDay=(+chosenDay.slice(0,4)-1)+chosenDay.slice(4),prev=latestForDay(pr
 $('compare').textContent=Number.isFinite(curr)&&Number.isFinite(old)?`Vorjahr bis ${priorDay.slice(5).replace('-','.')}.: ${fmt(old)} mm · ${fmt(curr-old)} mm (${old>0?fmt((curr-old)/old*100,0)+' %':'Prozentvergleich nicht möglich'})`:'Vorjahr: Keine vergleichbaren Stationsdaten';
 }
 function renderCurrent(){
+  renderCurrentWeather();
   $('current-temp').textContent = fmt(live?.temperature).replace(',', '.');
   updateTemperatureGauge('current', live?.temperature);
 
@@ -279,5 +337,14 @@ function render(){
   if (hourRenderFrame !== null) { cancelAnimationFrame(hourRenderFrame);hourRenderFrame=null; }
   updateHourControl();renderCurrent();renderSelection();
 }
-async function forecast(){try{const url=new URL('https://api.open-meteo.com/v1/forecast');Object.entries({latitude:LAT,longitude:LON,timezone:TZ,forecast_days:4,daily:'temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max'}).forEach(([k,v])=>url.searchParams.set(k,v));const x=await fetchJson(url),d=x.daily,days=[1,2,3].map(i=>({date:d.time[i],min:d.temperature_2m_min[i],max:d.temperature_2m_max[i],rain:d.precipitation_sum[i],p:d.precipitation_probability_max[i],gust:d.wind_gusts_10m_max[i]}));if(days.some(x=>!x.date))throw Error('Unvollständige Prognose');const start=(d.temperature_2m_max[0]+d.temperature_2m_min[0])/2,end=(days[2].max+days[2].min)/2,diff=end-start;const trend=Math.abs(diff)<2?'Die Temperaturen bleiben ungefähr gleich.':diff>0?'Die Temperaturen werden voraussichtlich steigen.':'Die Temperaturen werden voraussichtlich sinken.';const rain=days.filter(x=>(x.rain??0)>=0.5||(x.p??0)>=60);const windy=days.filter(x=>(x.gust??0)>=50);const entries=[['Temperatur',trend],['Niederschlag',rain.length?`Niederschlag an ${rain.map(x=>new Date(x.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'short'})).join(', ')} erwartet.`:'Derzeit kein nennenswerter Niederschlag prognostiziert.'],['Wind / Sturm',windy.length?`Erhöhte Windböen möglich (bis ${fmt(Math.max(...windy.map(x=>x.gust)),0)} km/h).`:'Derzeit keine stärkeren Windböen prognostiziert.']];$('forecast').replaceChildren();for(const [name,description]of entries){let n=document.createElement('div');n.className='forecast-item';let b=document.createElement('strong');b.textContent=name;let p=document.createElement('p');p.textContent=description;n.append(b,p);$('forecast').append(n)}}catch(e){$('forecast').textContent='Prognose derzeit nicht verfügbar.'}}
+let forecastPending=null;
+function forecast(){
+  if(forecastPending)return forecastPending;
+  forecastPending=loadForecast().finally(()=>{forecastPending=null;});
+  return forecastPending;
+}
+async function loadForecast(){try{const url=new URL('https://api.open-meteo.com/v1/forecast');Object.entries({latitude:LAT,longitude:LON,timezone:TZ,forecast_days:4,wind_speed_unit:'kmh',current:'weather_code,is_day,wind_speed_10m,wind_gusts_10m',daily:'temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max'}).forEach(([k,v])=>url.searchParams.set(k,v));const x=await fetchJson(url);currentWeather=normalizeCurrentWeather(x);renderCurrentWeather();const d=x.daily,days=[1,2,3].map(i=>({date:d.time[i],min:d.temperature_2m_min[i],max:d.temperature_2m_max[i],rain:d.precipitation_sum[i],p:d.precipitation_probability_max[i],gust:d.wind_gusts_10m_max[i]}));if(days.some(x=>!x.date))throw Error('Unvollständige Prognose');const start=(d.temperature_2m_max[0]+d.temperature_2m_min[0])/2,end=(days[2].max+days[2].min)/2,diff=end-start;const trend=Math.abs(diff)<2?'Die Temperaturen bleiben ungefähr gleich.':diff>0?'Die Temperaturen werden voraussichtlich steigen.':'Die Temperaturen werden voraussichtlich sinken.';const rain=days.filter(x=>(x.rain??0)>=0.5||(x.p??0)>=60);const windy=days.filter(x=>(x.gust??0)>=50);const entries=[['Temperatur',trend],['Niederschlag',rain.length?`Niederschlag an ${rain.map(x=>new Date(x.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'short'})).join(', ')} erwartet.`:'Derzeit kein nennenswerter Niederschlag prognostiziert.'],['Wind / Sturm',windy.length?`Erhöhte Windböen möglich (bis ${fmt(Math.max(...windy.map(x=>x.gust)),0)} km/h).`:'Derzeit keine stärkeren Windböen prognostiziert.']];$('forecast').replaceChildren();for(const [name,description]of entries){let n=document.createElement('div');n.className='forecast-item';let b=document.createElement('strong');b.textContent=name;let p=document.createElement('p');p.textContent=description;n.append(b,p);$('forecast').append(n)}}catch(e){renderCurrentWeather();$('forecast').textContent='Prognose derzeit nicht verfügbar.'}}
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});updateHourControl();loadRelevant().then(render);forecast();
+
+// Keep the current-weather icon fresh without polling while the app is hidden.
+setInterval(()=>{if(!document.hidden)forecast();},10*60*1000);

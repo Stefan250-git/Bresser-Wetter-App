@@ -52,7 +52,7 @@ function harness(code = source) {
     clearTimeout(id) { timers.delete(id); },
     fetch: async url => {
       stats.requests.push(url);
-      return { ok: true, json: async () => url.includes('latest') ? null : [] };
+      return { ok: true, json: async () => String(url).includes('latest') ? null : [] };
     },
     document: {
       hidden:false,
@@ -210,7 +210,7 @@ async function tests() {
   const secondRefresh = h.nodes.get('refresh').onclick();
   assert.equal(h.nodes.get('refresh').disabled, true);
   await Promise.all([firstRefresh, secondRefresh]);
-  assert.equal(h.stats.requests.filter(url => url.includes('latest')).length, 1);
+  assert.equal(h.stats.requests.filter(url => String(url).includes('latest')).length, 1);
   assert.equal(h.nodes.get('refresh').disabled, false);
   assert.equal(h.nodes.get('refresh').attributes['aria-busy'], 'false');
   assert.equal(h.nodes.get('current-temp').textContent, '7.3');
@@ -276,6 +276,65 @@ async function tests() {
   await forecast.run('forecast()');
   assert.equal(forecast.nodes.get('forecast').textContent,'Prognose derzeit nicht verfügbar.');
 
+  const weather=harness();
+  const now=Date.parse('2026-11-24T11:00:00Z');
+  const station={timestamp:'2026-11-24T12:00:00+01:00',rain_rate:0,wind_speed:5,temperature:-7};
+  const model={code:0,isDay:true,time:now,wind:5,gusts:10};
+  const cases=[
+    [{...station,rain_rate:1},model,'rain','Es regnet'],
+    [{...station,rain_rate:1},{...model,code:75},'snow','Es schneit'],
+    [station,model,'sun','Sonnig'],
+    [station,{...model,isDay:false},'moon','Klarer Himmel'],
+    [station,{...model,code:2},'partly','Leicht bewölkt'],
+    [station,{...model,code:2,isDay:false},'partly-night','Leicht bewölkt'],
+    [station,{...model,code:3},'cloudy','Bewölkt'],
+    [station,{...model,code:45},'fog','Es ist neblig'],
+    [station,{...model,code:61},'rain','Regen möglich'],
+    [null,{...model,code:61},'rain','Es regnet'],
+    [null,{...model,code:53},'drizzle','Es nieselt'],
+    [null,{...model,code:66},'ice','Gefrierender Regen'],
+    [null,{...model,code:86},'snow','Es schneit'],
+    [null,{...model,code:97},'thunder','Gewitter'],
+    [{...station,wind_speed:80},null,'storm','Es stürmt'],
+    [{...station,wind_speed:120},null,'storm','Orkan'],
+    [{...station,wind_speed:65},model,'storm','Stürmisch'],
+    [null,{...model,gusts:90},'storm','Sturmböen'],
+    [null,{...model,code:999},'unknown','Keine Wetterdaten'],
+    [{...station,timestamp:'2026-11-24T08:00:00Z',rain_rate:9},{...model,time:now-2*3600000},'unknown','Keine Wetterdaten'],
+    [null,{...model,time:now+3600000},'unknown','Keine Wetterdaten']
+  ];
+  for(const [observation,current,kind,label] of cases) {
+    weather.context.observation=observation;weather.context.current=current;
+    const state=weather.run('weatherState(observation,current)');
+    assert.equal(state.kind,kind);assert.equal(state.label,label);
+  }
+  weather.context.payload={utc_offset_seconds:3600,current:{time:'2026-11-24T12:00',weather_code:0,is_day:1}};
+  assert.equal(weather.run('normalizeCurrentWeather(payload).time'),now,'Provider local time uses its UTC offset');
+  weather.context.payload.current.time='2026-11-24T11:00:00Z';
+  assert.equal(weather.run('normalizeCurrentWeather(payload).time'),now);
+  weather.context.payload.current.time=now/1000;
+  assert.equal(weather.run('normalizeCurrentWeather(payload).time'),now);
+  weather.context.payload.current.is_day=null;
+  assert.equal(weather.run('normalizeCurrentWeather(payload)'),null);
+  weather.context.observation={...station,rain_rate:2};
+  weather.run("live=observation;chosenDay='2026-11-22';renderCurrent()");
+  assert.equal(weather.nodes.get('current-weather').dataset.weather,'rain','Badge always uses current weather, not the selected archive date');
+  assert(weather.nodes.get('current-weather').attributes.title.includes('Station'));
+  assert.equal(weather.nodes.get('current-weather-label').textContent,'Es regnet');
+
+  const currentRequest=harness();let requestCount=0,finishWeather;
+  currentRequest.context.fetch=async url=>{
+    requestCount++;
+    assert.equal(url.searchParams.get('current'),'weather_code,is_day,wind_speed_10m,wind_gusts_10m');
+    return new Promise(resolve=>{finishWeather=resolve;});
+  };
+  const weatherA=currentRequest.run('forecast()'),weatherB=currentRequest.run('forecast()');
+  assert.equal(requestCount,1,'Current and daily weather share one request; simultaneous refreshes are combined');
+  finishWeather({ok:true,json:async()=>({utc_offset_seconds:3600,current:{time:'2026-11-24T12:00',weather_code:71,is_day:1},daily})});
+  await Promise.all([weatherA,weatherB]);
+  assert.equal(currentRequest.nodes.get('current-weather').dataset.weather,'snow');
+  assert.equal(currentRequest.nodes.get('forecast').children.length,3);
+
   const listeners={},deleted=[];
   const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');
   const version=sw.match(/const CACHE = '([^']+)'/)[1];
@@ -290,7 +349,7 @@ async function tests() {
     const asset=html.match(new RegExp(name.replace('.','\\.')+'\\?v=\\d+'))[0];
     assert(sw.includes(asset),'Service worker and HTML asset versions match');
   }
-  console.log('PASS: two-second hold, short taps, drag cancellation, scale-label hold, large live preview, immediate thumb, coalesced rendering, 25 hours, navigation, midnight, cache, rain, offline refresh, request races, wind, forecast and service worker.');
+  console.log('PASS: two-second hold, slider, navigation, archive lookup, offline refresh, request races, wind, current-weather states/day/night/freshness, shared forecast request and service worker.');
 }
 
 function benchmark(code) {

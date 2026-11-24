@@ -56,3 +56,25 @@
 @media(prefers-color-scheme:dark){.hour-preview{background:#d9eaf7;color:#122945;border-color:#a5cee9}}
 
 .hour-ruler{touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+
+.current-weather-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.current-weather-heading .section-title{margin:0}.weather-badge{width:88px;flex:0 0 88px;display:flex;flex-direction:column;align-items:center;text-align:center}.weather-badge svg{display:block;width:56px;height:56px}.weather-caption{font-size:10px;line-height:1.3;color:#60748b}.weather-scene{display:none}
+.weather-badge[data-weather="sun"] .weather-scene[data-kind="sun"]{display:inline}
+.weather-badge[data-weather="moon"] .weather-scene[data-kind="moon"]{display:inline}
+.weather-badge[data-weather="partly"] .weather-scene[data-kind="partly"]{display:inline}
+.weather-badge[data-weather="partly-night"] .weather-scene[data-kind="partly-night"]{display:inline}
+.weather-badge[data-weather="cloudy"] .weather-scene[data-kind="cloudy"]{display:inline}
+.weather-badge[data-weather="rain"] .weather-scene[data-kind="rain"]{display:inline}
+.weather-badge[data-weather="drizzle"] .weather-scene[data-kind="drizzle"]{display:inline}
+.weather-badge[data-weather="snow"] .weather-scene[data-kind="snow"]{display:inline}
+.weather-badge[data-weather="ice"] .weather-scene[data-kind="ice"]{display:inline}
+.weather-badge[data-weather="storm"] .weather-scene[data-kind="storm"]{display:inline}
+.weather-badge[data-weather="thunder"] .weather-scene[data-kind="thunder"]{display:inline}
+.weather-badge[data-weather="fog"] .weather-scene[data-kind="fog"]{display:inline}
+.weather-badge[data-weather="unknown"] .weather-scene[data-kind="unknown"]{display:inline}
+.weather-rain{animation:weather-drizzle 1.5s ease-in infinite}.weather-snow{transform-origin:32px 32px;animation:weather-flurry 4s ease-in-out infinite}.weather-wind{animation:weather-breeze 2.5s ease-in-out infinite}.weather-lightning{animation:weather-flash 4s ease-in-out infinite}
+@keyframes weather-drizzle{0%{transform:translateY(-2px);opacity:.65}70%{opacity:1}100%{transform:translateY(3px);opacity:.4}}
+@keyframes weather-flurry{0%,100%{transform:translateY(-1px) rotate(-7deg)}50%{transform:translateY(2px) rotate(7deg)}}
+@keyframes weather-breeze{0%,100%{transform:translateX(-1px)}50%{transform:translateX(2px)}}
+@keyframes weather-flash{0%,65%,100%{opacity:1}72%,84%{opacity:.45}}
+@media(prefers-color-scheme:dark){.weather-caption{color:#abbdd0}}
+@media(prefers-reduced-motion:reduce){.weather-rain,.weather-snow,.weather-wind,.weather-lightning{animation:none}}
