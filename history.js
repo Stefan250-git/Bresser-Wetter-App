@@ -82,7 +82,7 @@ const WeatherHistory = (() => {
           first:group[0].time,last:group[group.length-1].time};
       });
     }
-    const gap=raw.length===0 || raw[0].time>start+GAP || raw.at(-1).time<end-GAP ||
+    const gap=raw.length===0 || selected.some(row=>!Number.isFinite(row.temperature)) || raw[0].time>start+GAP || raw.at(-1).time<end-GAP ||
       raw.some((row,index)=>index>0 && row.time-raw[index-1].time>GAP);
     return {hours,start,end,raw,points,bins,total,average:total===null?null:total/(hours/24),
       min:raw.length?Math.min(...raw.map(row=>row.temperature)):null,
@@ -140,7 +140,7 @@ const WeatherHistory = (() => {
     get('history-rain-chart').innerHTML=svg(axes(0,rainMax)+model.bins.map(bin=>{
       const xx=x(bin.start),w=Math.max(1,x(bin.end)-xx-2),h=bin.amount===null?0:bin.amount/rainMax*(bottom-top);
       return (bin.amount===null?`<text x="${xx+w/2}" y="${bottom-5}" text-anchor="middle">?</text>`:
-        `<rect class="history-bar" opacity="${bin.partial?.65:1}" x="${xx+1}" y="${bottom-Math.max(1,h)}" width="${w}" height="${Math.max(1,h)}"><title>${detailFormat.format(new Date(bin.start))}: ${fmt(bin.amount)} mm${bin.partial?' · unvollständig':''}</title></rect>`)+
+        `<rect class="history-bar" opacity="${bin.partial ? .65 : 1}" x="${xx+1}" y="${bottom-Math.max(1,h)}" width="${w}" height="${Math.max(1,h)}"><title>${detailFormat.format(new Date(bin.start))}: ${fmt(bin.amount)} mm${bin.partial?' · unvollständig':''}</title></rect>`)+
         (model.hours===168 && bin.partial?`<text x="${xx+w/2}" y="${bottom+11}" text-anchor="middle">*</text>`:'');
     }).join(''),'Niederschlagsmengen in Millimeter; Fragezeichen bedeuten fehlende Daten');
     let selected=model.end;

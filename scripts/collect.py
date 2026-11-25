@@ -26,6 +26,12 @@ def stat(stats, key, stamp):
     if isinstance(value, (list, tuple)) and len(value) > 1:
         epoch, total = num(value[0]), num(value[1])
         if epoch is not None and abs(epoch - stamp.timestamp()) <= 1200:
+            measured = datetime.fromtimestamp(epoch, tz=LOCAL)
+            local = stamp.astimezone(LOCAL)
+            if '_day_' in key and measured.date() != local.date():
+                return None
+            if '_month_' in key and (measured.year, measured.month) != (local.year, local.month):
+                return None
             return total if total is not None and total >= 0 else None
     return None
 

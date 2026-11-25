@@ -522,6 +522,29 @@ async function tests() {
   assert(html.indexOf('id="river-title"')>html.indexOf('id="moon-title"'));
   assert(html.indexOf('id="river-title"')<html.indexOf('>Ausblick'));
 
+  // History updates share the existing station loader and never fetch on toggle.
+  const history=harness();seed(history);
+  const requestsBeforeToggle=history.stats.requests.length;
+  history.nodes.get('history-168').onclick();
+  assert.equal(history.nodes.get('history-168').attributes['aria-pressed'],'true');
+  assert(history.nodes.get('history-rain-extra').textContent.includes('24 h'));
+  history.nodes.get('history-24').onclick();
+  assert.equal(history.nodes.get('history-24').attributes['aria-pressed'],'true');
+  assert.equal(history.stats.requests.length,requestsBeforeToggle,'Toggling uses loaded station archives');
+  let automaticCallback,automaticDelay,automaticLoads=0;
+  history.context.setInterval=(callback,delay)=>{automaticCallback=callback;automaticDelay=delay;};
+  history.context.reloadStation=force=>{assert.equal(force,true);automaticLoads++;return Promise.resolve();};
+  history.run('loadRelevant=reloadStation;forecast=()=>{};loadRiver=()=>{};');
+  history.run(source.slice(source.indexOf('// Keep the current-weather icon fresh')));
+  assert.equal(automaticDelay,600000,'Station history refreshes every ten minutes');
+  automaticCallback();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(automaticLoads,1);
+  history.context.document.hidden=true;automaticCallback();
+  assert.equal(automaticLoads,1,'No station polling in the background');
+  history.context.document.hidden=false;history.documentListeners.visibilitychange();
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(automaticLoads,2,'Returning to the app reloads station archives');
+
   const listeners={},deleted=[];
   const sw=fs.readFileSync(path.join(root,'sw.js'),'utf8');
   const version=sw.match(/const CACHE = '([^']+)'/)[1];
@@ -538,7 +561,10 @@ async function tests() {
   assert.equal(riverIntercepted,false,'Official gauge requests bypass the service-worker cache');
   assert(sw.includes('./assets/rhine-levels.jpg'));
   assert(fs.statSync(path.join(root,'assets/rhine-levels.jpg')).size>0);
-  for(const name of ['app.js','styles.css']) {
+  let dataIntercepted=false;
+  listeners.fetch({request:{method:'GET',url:'https://example.org/weather/data/2026-11.json'},respondWith(){dataIntercepted=true;}});
+  assert.equal(dataIntercepted,false,'Station archives bypass the service-worker cache');
+  for(const name of ['app.js','styles.css','history.js']) {
     const asset=html.match(new RegExp(name.replace('.','\\.')+'\\?v=\\d+'))[0];
     assert(sw.includes(asset),'Service worker and HTML asset versions match');
   }

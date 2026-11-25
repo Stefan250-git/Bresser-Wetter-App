@@ -37,6 +37,10 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(stat({'rain': [stamp.timestamp(), 0]}, 'rain', stamp), 0)
         self.assertIsNone(stat({'rain': [stamp.timestamp() - 3600, 7]}, 'rain', stamp))
         self.assertIsNone(stat({'rain': [stamp.timestamp(), -1]}, 'rain', stamp))
+        midnight = parse_stamp('2026-12-01T00:05:00+01:00')
+        previous = midnight.timestamp() - 600
+        for key in ['rain_day_total', 'rain_month_total']:
+            self.assertIsNone(stat({key: [previous, 12]}, key, midnight))
         with self.assertRaises(ValueError):
             parse_stamp('2026-11-01T12:00:00')
 
