@@ -102,18 +102,19 @@ const WeatherHistory = (() => {
   function render(model,current,root=document) {
     const get=id=>root.getElementById(id),text=(id,value)=>{get(id).textContent=value;};
     text('history-current',fmt(current?.temperature)+' °C');
-    text('history-current-time',current?.timestamp?'Messung: '+detailFormat.format(new Date(current.timestamp)):'Keine aktuelle Messung');
     text('history-extremes','Min '+fmt(model.min)+' °C · Max '+fmt(model.max)+' °C');
     text('history-rain-total',fmt(model.total)+' mm');
-    text('history-rain-label',model.rainPartial?'Erfasste Teilmenge':'Gesamtniederschlag');
-    text('history-rain-extra',(model.hours===168?'Ø '+fmt(model.average)+' mm / 24 h · ':'')+'Intensität: '+fmt(current?.rain_rate)+' mm/h');
-    text('history-note',!model.raw.length?'Keine Temperaturmessungen im gewählten Zeitraum.':
-      (model.gap?'Unvollständige Historie · verfügbare Messungen ab '+detailFormat.format(new Date(model.availableStart))+'. ':'')+
-      (model.rainPartial?'Regen: Teilsumme; fehlende Intervalle und Zählerrücksetzungen bleiben unbekannt. ':'')+
-      (model.hours===168?'* Unvollständiger Kalendertag oder Messlücken; Stundenmittel können unvollständig sein. Min/Max aus Originalmessungen.':''));
+    text('history-rain-label',model.rainPartial?'Teilmenge':'Gesamt');
+    text('history-rain-extra',(model.hours===168?'Ø '+fmt(model.average)+' mm / 24 h · ':'')+'Aktuell '+fmt(current?.rain_rate)+' mm/h');
+    text('history-note',[
+      !model.raw.length?'Keine Temperaturdaten.':model.gap?'Historie unvollständig.':'',
+      model.rainPartial?'Regenmenge unvollständig.':'',
+      model.hours===168 && model.bins.some(bin=>bin.partial)?'* Teiltag / Messlücken.':''
+    ].filter(Boolean).join(' '));
+    get('history-feels-legend').hidden=!model.points.some(row=>Number.isFinite(row.feels));
     get('history-24').setAttribute('aria-pressed',String(model.hours===24));
     get('history-168').setAttribute('aria-pressed',String(model.hours===168));
-    const width=Math.max(220,Math.round(get('history-temperature-chart').getBoundingClientRect().width)),height=180;
+    const width=Math.max(220,Math.round(get('history-temperature-chart').getBoundingClientRect().width)),height=model.hours===168?196:180;
     const values=model.points.flatMap(row=>[row.temperature,row.feels]).filter(Number.isFinite);
     const low=values.length?Math.floor(Math.min(...values)-1):0,high=values.length?Math.ceil(Math.max(...values)+1):10;
     const rainMax=Math.max(1,...model.bins.map(bin=>bin.amount??0))*1.1;
@@ -124,10 +125,25 @@ const WeatherHistory = (() => {
     let ticks=[];
     if(model.hours===24)for(let time=Math.ceil(model.start/(6*HOUR))*6*HOUR;time<=model.end;time+=6*HOUR)ticks.push(time);
     else ticks=model.bins.map(bin=>(bin.start+bin.end)/2).filter((_,index)=>width>=440 || index%2===0);
+    // Always label both exact window boundaries; leave space around them so
+    // neighbouring ticks cannot collide on narrow phones.
+    const tickGap=model.hours===24?52:86;
+    let previousX=left;
+    ticks=ticks.filter(time=>{
+      const position=x(time);
+      if(position-previousX<tickGap || right-position<tickGap)return false;
+      previousX=position;return true;
+    });
+    const timeLabels=[model.start,...ticks,model.end].map((time,index)=>{
+      const edge=index===0?'start':index===ticks.length+1?'end':null;
+      const label=model.hours===24?clockFormat.format(new Date(time)):dateFormat.format(new Date(time));
+      const clock=model.hours===168 && edge?`<tspan x="${x(time)}" dy="15">${clockFormat.format(new Date(time))}</tspan>`:'';
+      return `<text class="history-x-label${edge?' history-time-'+edge:''}" x="${x(time)}" y="160" text-anchor="${edge||'middle'}">${label}${clock}</text>`;
+    }).join('');
     const axes=(min,max)=>[0,.25,.5,.75,1].map(fraction=>{
       const yy=bottom-fraction*(bottom-top);
       return `<path class="history-grid" d="M${left} ${yy}H${right}"/><text class="history-y-label" x="${left-7}" y="${yy+5}" text-anchor="end">${fmt(min+fraction*(max-min))}</text>`;
-    }).join('')+ticks.map(time=>`<text x="${x(time)}" y="160" text-anchor="middle">${model.hours===24?clockFormat.format(new Date(time)):dateFormat.format(new Date(time))}</text>`).join('');
+    }).join('')+timeLabels;
     function line(key) {
       const segments=[];let segment=[];let previous=null;
       for(const row of model.points) {
@@ -190,7 +206,7 @@ const WeatherHistory = (() => {
         event.preventDefault();inspect(event.key==='Home'?model.start:event.key==='End'?model.end:selected+(event.key==='ArrowLeft'?-1:1)*(model.hours===24?600000:HOUR));
       }};
     }
-    text('history-inspection','Antippen oder mit der Maus erkunden · Tastatur: ← →');
+    text('history-inspection','');
   }
   return {build,rows,rainDelta,midnight,day,render,temperatureColor};
 })();

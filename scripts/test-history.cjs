@@ -61,4 +61,17 @@ for(const color of ['#3287e6','#28a66a','#ec5547'])assert(chart.includes('stop-c
 assert(chart.includes('fill="url(#history-temperature-fill-0)"'));
 assert.equal((chart.match(/class="history-y-label"/g)||[]).length,5);
 assert.equal((elements.get('history-rain-chart').innerHTML.match(/class="history-y-label"/g)||[]).length,5);
+for(const hours of [24,168]) {
+  history.render(history.build(colored,hours,now+37*60000),colored.at(-1),root);
+  for(const id of ['history-temperature-chart','history-rain-chart']) {
+    const svg=elements.get(id).innerHTML;
+    for(const edge of ['start','end']) {
+      const label=svg.match(new RegExp('<text class="history-x-label history-time-'+edge+'"[^>]*>(.*?)</text>'));
+      assert(label,'Exact window boundary is always labelled');
+      assert(label[1].includes('13:37'),'Boundary includes exact Berlin clock time');
+      if(hours===168)assert(label[1].includes('<tspan'),'Weekly endpoints retain both date and time');
+    }
+  }
+  assert.equal(elements.get('history-inspection').textContent,'','No persistent instruction text');
+}
 console.log('PASS: 24h/168h, original extrema, hourly means, rainfall sums/average, deduplication, missing values, gaps, resets, 23h/25h Berlin days and month boundaries.');

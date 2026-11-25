@@ -1,5 +1,9 @@
 # Wetterverlauf – Umsetzung und Prüfung
 
+## Aktualisierung: klare Diagrammtitel und Zeitgrenzen
+
+Die gemeinsame Karte trägt jetzt die Diagrammtitel „Temperaturverlauf“ und „Niederschlagsverlauf“. Beide Zeitachsen zeigen immer die genaue Berliner Uhrzeit an Anfang und Ende des gewählten Fensters, in der Wochenansicht zusammen mit dem Datum. Zwischenbeschriftungen halten Abstand zu den Randzeiten. Doppelte Messzeitangaben und permanente Bedienanweisungen entfallen; Meldungen sind auf Datenlücken und unvollständige Regenmengen gekürzt. Die Legende für gefühlte Temperatur erscheint nur bei vorhandenen Werten. Version 33 aktualisiert auch den PWA-Cache. Bestehende Funktionstests und ergänzte Prüfungen für beide Zeitgrenzen sind erfolgreich; eine erneute visuelle Geräteprüfung wurde nicht durchgeführt.
+
 ## Aktualisierung: Farbfläche und größere Achsen
 
 Die Fläche unter der Temperaturlinie verwendet dieselben absoluten Celsius-Farben wie der aktuelle Tacho: Blau bis 1 °C, weicher Übergang bis 7 °C zu Grün, Grün bis 22 °C und Übergang bis 28 °C zu Rot. Die Farbe folgt den einzelnen Messwerten entlang der Zeitachse und bleibt unabhängig von der dynamischen Y-Skala. Messlücken teilen auch die Farbfläche. Die Temperaturkurve bleibt orange und die gefühlte Temperatur grau gestrichelt.
