@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-11-25T17:10:29Z",
+  "station": "1073176104",
+  "current": {"epoch": 1795626432, "rain_rate": 0.0, "rain": 0.0},
+  "stats": {
+    "rain_current": [1795626432, 0],
+    "rain_day_total": [1795564800, 0],
+    "rain_month_total": [1793491200, 2.8]
+  }
+}

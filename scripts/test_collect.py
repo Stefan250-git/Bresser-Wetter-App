@@ -10,6 +10,49 @@ from collect import archive_item, num, stat, parse_stamp, main
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_real_weathercloud_period_labels_are_not_stale_measurements(self):
+        fixture = json.loads((Path(__file__).parent / 'fixtures/weathercloud-rain.json').read_text())
+        stamp = datetime.fromtimestamp(fixture['current']['epoch'], tz=timezone.utc)
+        self.assertEqual(stat(fixture['stats'], 'rain_day_total', stamp), 0)
+        self.assertEqual(stat(fixture['stats'], 'rain_month_total', stamp), 2.8)
+        # Actual current readings still require fresh measurement timestamps.
+        self.assertIsNone(stat({'rain_current': [1793491200, 2.8]}, 'rain_current', stamp))
+
+    def test_calendar_labels_at_berlin_midnight_and_clock_changes(self):
+        for date in ['2026-12-01', '2026-03-29', '2026-10-25']:
+            with self.subTest(date=date):
+                offset = '+02:00' if date == '2026-10-25' else '+01:00'
+                stamp = parse_stamp(date + 'T00:05:00' + offset)
+                day_label = parse_stamp(date + 'T00:00:00Z').timestamp()
+                month_label = parse_stamp(date[:7] + '-01T00:00:00Z').timestamp()
+                self.assertEqual(stat({'rain_day_total': [day_label, 0]}, 'rain_day_total', stamp), 0)
+                self.assertEqual(stat({'rain_month_total': [month_label, 2.8]}, 'rain_month_total', stamp), 2.8)
+                previous_day = day_label - 86400
+                self.assertIsNone(stat({'rain_day_total': [previous_day, 4]}, 'rain_day_total', stamp))
+
+    def test_real_rain_totals_reach_latest_and_archive(self):
+        fixture = json.loads((Path(__file__).parent / 'fixtures/weathercloud-rain.json').read_text())
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            current = SimpleNamespace(**fixture['current'], temperature=0.8,
+                                      heat_index=None, wind_chill=0.8,
+                                      wind_speed=1, wind_direction=54)
+            client = MagicMock()
+            client.__enter__.return_value = client
+            client.get_current_conditions.return_value = current
+            client.get_device_stats.return_value = fixture['stats']
+            with patch.dict('sys.modules', weathercloud=SimpleNamespace(WeathercloudClient=lambda **kwargs: client)), \
+                    patch('collect.ROOT', directory), \
+                    patch('collect.archive_item', side_effect=lambda item: archive_item(item, directory)):
+                main()
+            latest = json.loads((directory / 'latest.json').read_text())
+            archive = json.loads((directory / '2026-11.json').read_text())
+            for reading in [latest, archive[0]]:
+                self.assertEqual(reading['rain_day'], 0)
+                self.assertEqual(reading['rain_month'], 2.8)
+                self.assertEqual(reading['rain_rate'], 0)
+            self.assertEqual(len(archive), 1)
+
     def test_persistence_deduplication_and_stale_readings(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)

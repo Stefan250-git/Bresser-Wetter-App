@@ -22,17 +22,25 @@ def num(value):
 
 
 def stat(stats, key, stamp):
+    """Totals carry a UTC calendar-period label, not a reading timestamp."""
     value = stats.get(key)
     if isinstance(value, (list, tuple)) and len(value) > 1:
         epoch, total = num(value[0]), num(value[1])
-        if epoch is not None and abs(epoch - stamp.timestamp()) <= 1200:
-            measured = datetime.fromtimestamp(epoch, tz=LOCAL)
-            local = stamp.astimezone(LOCAL)
-            if '_day_' in key and measured.date() != local.date():
-                return None
-            if '_month_' in key and (measured.year, measured.month) != (local.year, local.month):
-                return None
-            return total if total is not None and total >= 0 else None
+        if epoch is None or total is None or total < 0:
+            return None
+        try:
+            measured = datetime.fromtimestamp(epoch, tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
+        local = stamp.astimezone(LOCAL)
+        if key.endswith('_total'):
+            # Weathercloud labels 25 November as 25 Nov 00:00 UTC, including
+            # readings from Berlin's first hour (still 24 Nov in UTC).
+            period = '%Y-%m-%d' if '_day_' in key else '%Y-%m' if '_month_' in key else None
+            if period:
+                return total if measured.strftime(period) == local.strftime(period) else None
+        if abs(epoch - stamp.timestamp()) <= 1200:
+            return total
     return None
 
 

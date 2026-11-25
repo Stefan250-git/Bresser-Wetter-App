@@ -1,5 +1,13 @@
 # Wetterverlauf – Umsetzung und Prüfung
 
+## Fehlerkorrektur: fehlende Niederschlagssummen
+
+Am 25.11.2026 zeigte der direkte Vergleich der echten Weathercloud-Antwort mit `data/latest.json`: `rain_day_total=[1795564800,0]` und `rain_month_total=[1793491200,2.8]` waren verfügbar, wurden aber durch die 20-Minuten-Altersprüfung als `null` gespeichert. Diese Zeitstempel bezeichnen den Tages-/Monatsbeginn (25.11. bzw. 01.11., jeweils 00:00 UTC), nicht das Alter der aktuellen Statistikantwort. Seit der Einführung der Prüfung waren deshalb die Summen trotz erfolgreicher Sammelläufe ausgefallen. Die Intensität `rain_rate` wurde weiterhin übertragen.
+
+`stat()` prüft Summen jetzt gegen ihre Kalenderperiode; echte Momentanwerte behalten die Aktualitätsprüfung. UTC-Periodenbezeichnungen werden mit dem Berliner Kalenderdatum der Messung verglichen, auch während der ersten lokalen Stunde. Vorperioden, fehlende, negative und ungültige Werte bleiben ausgeschlossen. Eine reale, öffentliche Antwort liegt als kleine Regressionstest-Fixture unter `scripts/fixtures/weathercloud-rain.json`; sie dient ausschließlich Tests und wird nicht als historische Messreihe eingespielt.
+
+Lokal bestanden acht Python-Tests sowie die bestehenden JS-Verlaufs- und Oberflächentests. Der Sammler wurde mit der real aufgezeichneten Antwort bis zu `latest.json` und Monatsarchiv getestet: Tag 0,0 mm, Monat 2,8 mm, Intensität 0,0 mm/h. Bereits entstandene historische Lücken werden nicht mit heutigen Summen rückwirkend aufgefüllt. Frontend, Cache und Diagrammgestaltung benötigen für diese Korrektur keine Änderung.
+
 ## Aktualisierung: klare Diagrammtitel und Zeitgrenzen
 
 Die gemeinsame Karte trägt jetzt die Diagrammtitel „Temperaturverlauf“ und „Niederschlagsverlauf“. Beide Zeitachsen zeigen immer die genaue Berliner Uhrzeit an Anfang und Ende des gewählten Fensters, in der Wochenansicht zusammen mit dem Datum. Zwischenbeschriftungen halten Abstand zu den Randzeiten. Doppelte Messzeitangaben und permanente Bedienanweisungen entfallen; Meldungen sind auf Datenlücken und unvollständige Regenmengen gekürzt. Die Legende für gefühlte Temperatur erscheint nur bei vorhandenen Werten. Version 33 aktualisiert auch den PWA-Cache. Bestehende Funktionstests und ergänzte Prüfungen für beide Zeitgrenzen sind erfolgreich; eine erneute visuelle Geräteprüfung wurde nicht durchgeführt.
