@@ -66,6 +66,7 @@ function harness(code = source) {
       createElement() { return { children: [], append(...children) { this.children.push(...children); } }; }
     }
   });
+  vm.runInContext(fs.readFileSync(path.join(root, "history.js"), "utf8"), context);
   vm.runInContext(code.slice(0, code.indexOf("if('serviceWorker'in navigator)")), context);
   return {
     context, nodes, frames, stats, timers,documentListeners, run: text => vm.runInContext(text, context),
