@@ -3,8 +3,8 @@
   "temperature": 0.6,
   "feels": 0.6,
   "rain_rate": 0.0,
-  "rain_day": null,
-  "rain_month": null,
+  "rain_day": 0.0,
+  "rain_month": 2.8,
   "wind_speed": 4.32,
   "wind_direction": 60.0
 }
