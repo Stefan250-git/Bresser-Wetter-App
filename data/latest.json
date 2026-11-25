@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-11-25T21:17:15Z",
+  "timestamp": "2026-11-25T21:27:15Z",
   "temperature": -0.3,
   "feels": -0.3,
   "rain_rate": 0.0,
   "rain_day": 0.0,
   "rain_month": 2.8,
   "wind_speed": 4.32,
-  "wind_direction": 56.0
+  "wind_direction": 192.0
 }
