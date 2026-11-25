@@ -1,11 +1,15 @@
 <!doctype html><html lang="de"><meta charset="utf-8"><title>Wetterverlauf Browserprüfung</title>
 <style>body{font:14px system-ui;margin:16px;background:#edf2f6;color:#122945}#frames{display:flex;gap:16px;align-items:start;flex-wrap:wrap}.preview{flex:none}iframe{display:block;border:1px solid #bdcbd8;height:900px;transform-origin:top left}pre{white-space:pre-wrap}h2{font-size:16px}button{padding:12px;margin:8px}</style>
-<h1>Wetterverlauf · Browserprüfung</h1><p>Lokaler Test mit den tatsächlich archivierten Messungen; Testuhr auf deren letzten Zeitstempel gesetzt. Keine Änderung der Stationsdaten.</p><details><summary>Prüfbericht</summary><pre id="result">Prüfung läuft …</pre></details><div id="frames"></div>
+<h1>Mobile UX · Browserprüfung</h1><p>Echte Archivmessungen, isolierte Testwerte für Prognose und Pegel. Testuhr auf dem letzten Archivzeitpunkt. Helle/dunkle Ansicht sowie 200 % Schriftgröße. Keine Änderung der Stationsdaten.</p><details><summary>Prüfbericht</summary><pre id="result">Prüfung läuft …</pre></details><div id="frames"></div>
 <script>
 (async()=>{
   const base=location.origin+'/',results=[],errors=[];
-  const [html,css,fixture,latest]=await Promise.all(['index.html','styles.css','data/2026-11.json','data/latest.json'].map(async path=>{const response=await fetch(base+path);return path.endsWith('.json')?response.json():response.text();}));
+  const [html,originalCss,mobileCss,fixture,latest]=await Promise.all(['index.html','styles.css','mobile.css','data/2026-11.json','data/latest.json'].map(async path=>{const response=await fetch(base+path);return path.endsWith('.json')?response.json():response.text();}));
+  const css=originalCss+'\n'+mobileCss;
   const clock=Math.max(...fixture.map(row=>Date.parse(row.timestamp)));
+  const dates=Array.from({length:4},(_,i)=>new Date(clock+i*86400000).toISOString().slice(0,10));
+  const forecast={current:{time:clock/1000,weather_code:0,is_day:0,wind_speed_10m:8,wind_gusts_10m:15},daily:{time:dates,weather_code:[0,2,61,0],temperature_2m_min:[0,1,-2,0],temperature_2m_max:[5,6,4,7],precipitation_sum:[0,.2,3.4,0],precipitation_probability_max:[0,20,80,5],wind_gusts_10m_max:[15,20,35,18]}};
+  const river={uuid:'f33c3cc9-dc4b-4b77-baa9-5a5f10704398',km:814,water:{shortname:'RHEIN'},timeseries:[{shortname:'W',unit:'cm',currentMeasurement:{value:405,timestamp:new Date(clock).toISOString(),stateMnwMhw:'normal'}}]};
   const frames=document.getElementById('frames');
   for(const dark of [false,true])for(const width of [320,360,390,412,768,1440]) {
     const host=document.createElement('div');host.className='preview';host.style.width=Math.min(width,660)+'px';
@@ -13,12 +17,12 @@
     const frame=document.createElement('iframe');frame.title=heading.textContent;frame.style.width=width+'px';
     if(width>660){frame.style.transform='scale('+660/width+')';frame.style.marginBottom=-(900-900*660/width)+'px';}
     host.append(frame);frames.append(host);
-    const setup=`window.qaErrors=[];addEventListener('error',event=>qaErrors.push(event.message));addEventListener('unhandledrejection',event=>qaErrors.push(String(event.reason)));const RealDate=Date;window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[${clock}]));}static now(){return ${clock};}};window.fetch=async path=>{const url=String(path);if(url.includes('data/latest.json'))return {ok:true,json:async()=>(${JSON.stringify(latest)})};if(url.includes('data/'))return {ok:true,json:async()=>url.includes('2026-11')?${JSON.stringify(fixture)}:[]};throw Error('External API intentionally disabled in offline browser test');};`;
+    const setup=`window.qaErrors=[];addEventListener('error',event=>qaErrors.push(event.message));addEventListener('unhandledrejection',event=>qaErrors.push(String(event.reason)));const RealDate=Date;window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[${clock}]));}static now(){return ${clock};}};window.fetch=async path=>{const url=String(path);if(url.includes('data/latest.json'))return {ok:true,json:async()=>(${JSON.stringify(latest)})};if(url.includes('data/'))return {ok:true,json:async()=>url.includes('2026-11')?${JSON.stringify(fixture)}:[]};if(url.includes('api.open-meteo.com'))return {ok:true,json:async()=>(${JSON.stringify(forecast)})};if(url.includes('pegelonline.wsv.de'))return {ok:true,json:async()=>url.includes('measurements.json')?[]:(${JSON.stringify(river)})};throw Error('External API disabled in browser test');};`;
     const loaded=new Promise(resolve=>frame.onload=resolve);
-    frame.srcdoc=html.replace('<head>','<head><base href="'+base+'"><script>'+setup+'<\/script>')
-      .replace(/<link rel="stylesheet"[^>]+>/,'<style>'+css.replaceAll('@media(prefers-color-scheme:dark)',dark?'@media all':'@media not all')+'</style>');
+    frame.srcdoc=html.replace(/<link rel="stylesheet"[^>]+>/g,'').replace('<head>','<head><base href="'+base+'"><script>'+setup+'<\/script><style>'+css.replaceAll('@media(prefers-color-scheme:dark)',dark?'@media all':'@media not all')+'</style>');
     await loaded;await new Promise(resolve=>setTimeout(resolve,150));
     const doc=frame.contentDocument,win=frame.contentWindow;
+    doc.documentElement.style.colorScheme=dark?'dark':'light';
     if(!win.qaErrors){await fetch('/qa/result',{method:'POST',body:JSON.stringify({debug:doc.head.innerHTML.slice(0,6000)})});throw Error('QA setup did not execute');}
     const check=(condition,message)=>{if(!condition)errors.push(width+' '+dark+': '+message);};
     check(doc.documentElement.scrollWidth<=width,'Horizontal overflow');
@@ -38,14 +42,29 @@
     check(doc.querySelector('#history-rain-extra').textContent.includes('24 h'),'7-day average');
     check(doc.querySelectorAll('.history-chart svg').length===2,'Both charts after switch');
     doc.querySelector('#history-temperature-chart').dispatchEvent(new win.KeyboardEvent('keydown',{key:'Home',bubbles:true}));
-    check(!doc.querySelector('#history-inspection').textContent.includes('Tastatur'),'Keyboard values');
+    check(doc.querySelector('#history-inspection').textContent.includes('Regen:'),'Keyboard values');
     doc.querySelector('#history-rain-chart').dispatchEvent(new win.PointerEvent('pointerdown',{clientX:width/2,bubbles:true,pointerType:'touch'}));
     check(doc.querySelector('#history-inspection').textContent.includes('Regen'),'Touch values');
+    check(doc.querySelector('#history-temperature-cursor').getAttribute('transform')===doc.querySelector('#history-rain-cursor').getAttribute('transform'),'Synchronized markers');
     doc.querySelector('#history-24').click();
     check(doc.querySelector('#history-extremes').textContent===initial,'24h metrics restored');
+    check(doc.querySelectorAll('.forecast-day').length===3,'Three forecast day cards');
+    const rainBefore=doc.getElementById('rainmonth').textContent,windBefore=doc.getElementById('wind').textContent;
+    doc.getElementById('nav-archive').click();
+    check(doc.getElementById('view-today').hidden && !doc.getElementById('view-archive').hidden,'Separate archive view');
+    const slider=doc.getElementById('hour');slider.value='18';slider.dispatchEvent(new win.Event('input',{bubbles:true}));slider.dispatchEvent(new win.Event('change',{bubbles:true}));
+    check(doc.getElementById('hour-value').textContent==='18','Direct hour input');
+    check(doc.getElementById('rainmonth').textContent===rainBefore && doc.getElementById('wind').textContent===windBefore,'Current weather stays independent of archive');
+    check(doc.documentElement.scrollWidth<=width,'Archive horizontal overflow');
+    doc.documentElement.style.fontSize='200%';await new Promise(resolve=>setTimeout(resolve,100));
+    check(doc.documentElement.scrollWidth<=width,'Archive overflow with large text');
+    doc.getElementById('nav-today').click();doc.getElementById('more-details').open=true;doc.getElementById('update-banner').hidden=false;
+    await new Promise(resolve=>setTimeout(resolve,100));
+    check(doc.documentElement.scrollWidth<=width,'Today overflow with large text and expanded details');
+    doc.documentElement.style.fontSize='';doc.getElementById('more-details').open=false;doc.getElementById('update-banner').hidden=true;
     check(win.qaErrors.length===0,'JavaScript errors: '+win.qaErrors.join('; '));
-    win.scrollTo(0,card.offsetTop);
-    results.push({width,dark,overflow:doc.documentElement.scrollWidth>width,charts:doc.querySelectorAll('.history-chart svg').length,errors:win.qaErrors});
+    win.scrollTo(0,0);
+    results.push({width,dark,overflow:doc.documentElement.scrollWidth>width,charts:doc.querySelectorAll('.history-chart svg').length,largeTextChecked:true,errors:win.qaErrors});
   }
   const report={passed:errors.length===0,results,errors};
   document.getElementById('result').textContent=JSON.stringify(report,null,2);

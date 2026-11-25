@@ -15,7 +15,7 @@ function harness(code = source, now = '2026-11-24T11:00:00Z') {
   let timerId=0,clock=0;
   const timers=new Map(),documentListeners={};
   const frames = new Map(), stats = { formatters: 0, formats: 0, requests: [], animations: [] };
-  const nodes = new Map(ids.map(id => [id, {
+  const makeNode=id=>({
     value: '', disabled: false, writes: 0, text: '', dataset: {}, attributes: {}, captures:new Set(),
     style: { setProperty(key, value) { this[key] = value; } },
     nextElementSibling: {}, children: [],
@@ -34,7 +34,8 @@ function harness(code = source, now = '2026-11-24T11:00:00Z') {
     },
     set textContent(value) { this.writes++; this.text = value; },
     get textContent() { return this.text; }
-  }]));
+  });
+  const nodes=new Map(ids.map(id=>[id,makeNode(id)]));
   const instrumentedIntl = Object.create(Intl);
   instrumentedIntl.DateTimeFormat = function (...args) {
     stats.formatters++;
@@ -62,12 +63,15 @@ function harness(code = source, now = '2026-11-24T11:00:00Z') {
     document: {
       hidden:false,
       addEventListener(name,callback) { documentListeners[name]=callback; },
-      getElementById(id) { assert(nodes.has(id), 'Missing HTML element: ' + id); return nodes.get(id); },
-      createElement() { return { children: [], append(...children) { this.children.push(...children); } }; }
+      getElementById(id) {
+        if(!nodes.has(id)&&['history-temperature-cursor','history-rain-cursor','history-selected-point'].includes(id))nodes.set(id,makeNode(id));
+        assert(nodes.has(id),'Missing HTML element: '+id);return nodes.get(id);
+      },
+      createElement(tag) { return makeNode(tag); }
     }
   });
   vm.runInContext(fs.readFileSync(path.join(root, "history.js"), "utf8"), context);
-  vm.runInContext(code.slice(0, code.indexOf("if('serviceWorker'in navigator)")), context);
+  vm.runInContext(code.slice(0, code.indexOf("setupAppUpdates();updateHourControl()")), context);
   return {
     context, nodes, frames, stats, timers,documentListeners, run: text => vm.runInContext(text, context),
     advance(ms) { clock+=ms;for(const [id,timer] of [...timers])if(timer.at<=clock){timers.delete(id);timer.callback();} },
@@ -83,66 +87,40 @@ function seed(h) {
 }
 
 async function tests() {
-  function pointer(x,y=40,id=1,extra={}) {
-    return {clientX:x,clientY:y,pointerId:id,isPrimary:true,button:0,
-      preventDefault(){this.defaultPrevented=true;},...extra};
-  }
-  const hold=harness();seed(hold);
-  const slider=hold.nodes.get('hour');
-  for(let attempt=0;attempt<2;attempt++) {
-    slider.onpointerdown(pointer(208));hold.advance(1100);slider.onpointerup(pointer(208));
-  }
-  hold.advance(2000);
-  assert.equal(hold.run('chosenHour'),12,'Short taps never change the hour or accumulate hold time');
-  slider.onpointerdown(pointer(208));hold.advance(1999);
-  assert.equal(hold.run('chosenHour'),12,'No change before two seconds');
-  slider.value='18';slider.oninput({target:slider});
-  assert.equal(slider.value,'12','Native pointer input cannot bypass the hold');
-  hold.advance(1);
-  assert.equal(hold.run('chosenHour'),18,'Held track tap selects at two seconds');
-  assert.equal(hold.nodes.get('hour-control').dataset.pressState,'dragging');
-  assert.equal(hold.nodes.get('hour-preview').textContent,'18');
-  slider.onpointermove(pointer(238));
-  assert.equal(hold.nodes.get('hour-preview').textContent,'21','Large readout follows dragging immediately');
-  slider.onpointerup(pointer(238));
-  assert.equal(hold.nodes.get('temp').textContent,'21.0');
-  assert.equal(hold.nodes.get('hour-control').dataset.pressState,'idle');
-  assert.equal(hold.frames.size,0);
-  assert.equal(slider.captures.size,0);
+  const direct=harness();seed(direct);
+  const slider=direct.nodes.get('hour');
+  slider.oninput({target:{value:'18'}});
+  assert.equal(direct.run('chosenHour'),18,'Native range input changes immediately');
+  assert.equal(direct.timers.size,0,'No long-press delay');
+  slider.onpointerup();
+  assert.equal(direct.nodes.get('temp').textContent,'18,0');
+  direct.nodes.get('hour-back').onclick();assert.equal(direct.run('chosenHour'),17);
+  direct.nodes.get('hour-forward').onclick();assert.equal(direct.run('chosenHour'),18);
+  direct.run('selectHour(0)');direct.paint();assert(direct.nodes.get('hour-back').disabled);
+  direct.run('selectHour(24)');direct.paint();assert(direct.nodes.get('hour-forward').disabled);
+  direct.nodes.get('nav-archive').onclick();assert(direct.nodes.get('view-today').hidden);
+  assert.equal(direct.nodes.get('nav-archive').attributes['aria-pressed'],'true');
+  direct.nodes.get('nav-today').onclick();assert(direct.nodes.get('view-archive').hidden);
+  const stationView=harness(source,'2026-11-25T18:00:00Z');
+  stationView.run("live={timestamp:'2026-11-25T17:50:00Z',temperature:3,wind_speed:12,wind_direction:180,rain_day:0,rain_month:2.8};chosenDay='2026-11-24';render()");
+  assert.equal(stationView.nodes.get('status').dataset.state,'fresh');
+  assert(stationView.nodes.get('status').textContent.includes('10 Min.'));
+  assert.equal(stationView.nodes.get('wind').textContent,'12,0','Archive selection never hides current wind');
+  assert.equal(stationView.nodes.get('rainmonth').textContent,'2,8');
+  stationView.context.navigator={onLine:false};stationView.run('renderStationStatus()');
+  assert(stationView.nodes.get('status').textContent.startsWith('Offline'));
+  stationView.context.navigator.onLine=true;stationView.run("live={...live,timestamp:'2026-11-25T16:00:00Z'};renderStationStatus()");
+  assert.equal(stationView.nodes.get('status').dataset.state,'stale');
 
-  const grip=harness();seed(grip);
-  grip.nodes.get('hour').onpointerdown(pointer(168));grip.advance(2000);
-  assert.equal(grip.run('chosenHour'),12,'Holding the edge of the thumb does not jump');
-  grip.nodes.get('hour').onpointermove(pointer(228));
-  assert.equal(grip.run('chosenHour'),18,'Grip offset is preserved while dragging');
-  grip.nodes.get('hour').onpointermove(pointer(-100));
-  assert.equal(grip.run('chosenHour'),0);
-  grip.nodes.get('hour').onpointermove(pointer(500));
-  assert.equal(grip.run('chosenHour'),24);
-  grip.nodes.get('hour').onpointerup(pointer(500));
-
-  for(const action of ['scroll','early-drag','cancel','lost-capture','blur','hidden']) {
-    const cancel=harness();seed(cancel);
-    const input=cancel.nodes.get('hour');input.onpointerdown(pointer(208));cancel.advance(1000);
-    if(action==='scroll')input.onpointermove(pointer(208,80));
-    if(action==='early-drag')input.onpointermove(pointer(238));
-    if(action==='cancel')input.onpointercancel(pointer(208));
-    if(action==='lost-capture')input.onlostpointercapture(pointer(208));
-    if(action==='blur')input.onblur();
-    if(action==='hidden'){cancel.context.document.hidden=true;cancel.documentListeners.visibilitychange();}
-    cancel.advance(2000);
-    assert.equal(cancel.run('chosenHour'),12,action+' cancels pending changes');
-    assert.equal(cancel.timers.size,0);
-    assert.equal(cancel.nodes.get('hour-control').dataset.pressState,'idle');
-  }
-  const ruler=harness();seed(ruler);ruler.run('selectHour(11)');ruler.paint();
-  ruler.nodes.get('hour-ruler').onpointerdown(pointer(148,95));ruler.advance(2000);
-  assert.equal(ruler.run('chosenHour'),12,'A held scale-label tap selects its exact hour');
-  ruler.nodes.get('hour').onpointerup(pointer(148,95));
-  ruler.nodes.get('hour').onpointerdown(pointer(208,40,2,{isPrimary:false}));
-  ruler.nodes.get('hour').onpointerdown(pointer(208,40,1,{button:2}));
-  assert.equal(ruler.timers.size,0,'Secondary touch and right mouse button are ignored');
-
+  const updateView=harness(),swEvents={},messages=[];let reloads=0;
+  const waiting={postMessage(value){messages.push(value.type);}};
+  updateView.context.navigator={serviceWorker:{controller:{},addEventListener(name,fn){swEvents[name]=fn;},register:async()=>({waiting,addEventListener(){},update:async()=>{}})}};
+  updateView.context.window={location:{reload(){reloads++;}}};
+  updateView.run('setupAppUpdates()');await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(updateView.nodes.get('update-banner').hidden,false);
+  swEvents.controllerchange();assert.equal(reloads,0,'No unsolicited page reload');
+  updateView.nodes.get('apply-update').onclick();assert.deepEqual(messages,['SKIP_WAITING']);
+  swEvents.controllerchange();swEvents.controllerchange();assert.equal(reloads,1,'Approved app update reloads once');
   const h = harness();
   seed(h);
   assert.equal(h.run('chosenHour'), 12);
@@ -162,7 +140,7 @@ async function tests() {
   assert.equal(h.stats.formats, formatsBeforeDrag, 'No date work in the drag handler');
   assert.equal(h.nodes.get('temp').writes, selectionWrites);
   h.paint();
-  assert.equal(h.nodes.get('temp').textContent, '16.0');
+  assert.equal(h.nodes.get('temp').textContent, '16,0');
   assert.equal(h.nodes.get('temp').writes, selectionWrites + 1);
   assert.equal(h.nodes.get('current-temp').writes, liveWrites);
   assert.equal(h.nodes.get('wind').writes, windWrites);
@@ -170,7 +148,7 @@ async function tests() {
     h.nodes.get('hour').oninput({ target: { value: String(hour) } });
     h.nodes.get('hour').onchange();
     assert.equal(h.nodes.get('hour-value').textContent, String(hour));
-    assert.equal(h.nodes.get('temp').textContent, hour + '.0');
+    assert.equal(h.nodes.get('temp').textContent, hour + ',0');
     assert.equal(h.frames.size, 0, 'Final value flushed on release');
   }
   for (const invalid of [-1, 25, 1.5, 'invalid']) {
@@ -215,7 +193,7 @@ async function tests() {
     {timestamp:'2026-11-25T17:17:12Z',temperature:.5,rain_rate:0,rain_day:0,rain_month:2.8}
   ]};live=archive['2026-11'][2];render();`);
   assert.equal(rainDisplay.run('chosenHour'),12);
-  assert.equal(rainDisplay.nodes.get('temp').textContent,'1.0','Temperature still uses the selected hour');
+  assert.equal(rainDisplay.nodes.get('temp').textContent,'1,0','Temperature still uses the selected hour');
   assert.equal(rainDisplay.nodes.get('rainday').textContent,'0,0','Current daily zero is visible');
   assert.equal(rainDisplay.nodes.get('rainmonth').textContent,'2,8','Current month is not hidden by the noon gap');
   assert(rainDisplay.nodes.get('rain-time').textContent.includes('18:17'),'Rain time is shown explicitly');
@@ -226,7 +204,8 @@ async function tests() {
   rainDisplay.run("archive={};render()");
   assert.equal(rainDisplay.nodes.get('rainmonth').textContent,'2,8','Fresh latest.json can render before its monthly archive arrives');
   rainDisplay.run("chosenDay='2026-11-24';render()");
-  assert.equal(rainDisplay.nodes.get('rainmonth').textContent,'—','Current totals do not leak into another date');
+  assert.equal(rainDisplay.nodes.get('rainmonth').textContent,'2,8','Current rain stays independent of archive navigation');
+  assert.equal(rainDisplay.nodes.get('archive-rainmonth').textContent,'—','Archive does not borrow today’s counters');
 
   // Refresh is deduplicated and failed refreshes preserve the last known data.
   seed(h);
@@ -241,9 +220,12 @@ async function tests() {
   assert.equal(h.stats.requests.filter(url => String(url).includes('latest')).length, 1);
   assert.equal(h.nodes.get('refresh').disabled, false);
   assert.equal(h.nodes.get('refresh').attributes['aria-busy'], 'false');
-  assert.equal(h.nodes.get('current-temp').textContent, '7.3');
-  assert(h.nodes.get('status').textContent.startsWith('Aktualisierung fehlgeschlagen'));
+  assert.equal(h.nodes.get('current-temp').textContent, '7,3');
+  assert(h.nodes.get('status').textContent.startsWith('Abruf fehlgeschlagen'));
   assert.equal(h.run('recordsForDay("2026-11-24").length'), 24);
+  h.context.fetch=async()=>({ok:true,json:async()=>null});
+  await h.run('loadRelevant()');
+  assert.equal(h.run('live.temperature'),7.3,'Malformed latest data cannot erase the last known station reading');
 
   const monthLoad = harness();
   let finishMonth, monthFetches=0;
@@ -296,8 +278,8 @@ async function tests() {
       h.run('updateTemperatureGauge(kind,value,feels)');
       assert.equal(h.nodes.get(valueId).attributes.x,x,'Optical centering including minus sign');
       assert.equal(h.nodes.get(feltId).attributes.x,feltX);
-      assert.equal(h.nodes.get(valueId).textContent,Number.isFinite(value)?new Intl.NumberFormat('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1}).format(value).replace(',','.'):'\u2014');
-      assert.equal(h.nodes.get(feltId).textContent,Number.isFinite(feels)?new Intl.NumberFormat('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1}).format(feels).replace(',','.'):'\u2014');
+      assert.equal(h.nodes.get(valueId).textContent,Number.isFinite(value)?new Intl.NumberFormat('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1}).format(value):'\u2014');
+      assert.equal(h.nodes.get(feltId).textContent,Number.isFinite(feels)?new Intl.NumberFormat('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1}).format(feels):'\u2014');
     }
   }
   const sway=harness(),observers=[];
@@ -340,7 +322,8 @@ async function tests() {
   assert.equal(forecast.nodes.get('forecast').children.length,3);
   forecast.context.fetch=async()=>{throw Error('Test offline');};
   await forecast.run('forecast()');
-  assert.equal(forecast.nodes.get('forecast').textContent,'Prognose derzeit nicht verfügbar.');
+  assert.equal(forecast.nodes.get('forecast').children.length,3,'A failed refresh preserves the last forecast');
+  assert(forecast.nodes.get('forecast-time').textContent.includes('Letzte Prognose'));
 
   const weather=harness();
   const now=Date.parse('2026-11-24T11:00:00Z');
@@ -459,7 +442,7 @@ async function tests() {
   assert.equal(lunar.nodes.get('moon-lit').attributes.d,'');
   assert.equal(lunar.nodes.get('moon-next-full').textContent,'Nächster Vollmond: nicht verfügbar');
   assert(html.indexOf('id="moon-title"')>html.indexOf('id="wind-time"'));
-  assert(html.indexOf('id="moon-title"')<html.indexOf('>Ausblick'));
+  assert(html.indexOf('id="forecast-title"')<html.indexOf('id="moon-title"'));
 
   const river=harness();
   const gauge={uuid:'f33c3cc9-dc4b-4b77-baa9-5a5f10704398',km:814,water:{shortname:'RHEIN'},timeseries:[{shortname:'W',unit:'cm',currentMeasurement:{value:405,timestamp:'2026-11-24T11:00:00+01:00',stateMnwMhw:'normal'}}]};
@@ -542,7 +525,7 @@ async function tests() {
   const timeoutRiver=river.run('loadRiver(true)');river.advance(10000);await timeoutRiver;
   assert.equal(river.nodes.get('river-panel').attributes['aria-busy'],'false','Timed-out requests release the loading state');
   assert(html.indexOf('id="river-title"')>html.indexOf('id="moon-title"'));
-  assert(html.indexOf('id="river-title"')<html.indexOf('>Ausblick'));
+  assert(html.indexOf('id="forecast-title"')<html.indexOf('id="moon-title"'),'Forecast is ahead of secondary details');
 
   // History updates share the existing station loader and never fetch on toggle.
   const history=harness();seed(history);
@@ -553,6 +536,18 @@ async function tests() {
   history.nodes.get('history-24').onclick();
   assert.equal(history.nodes.get('history-24').attributes['aria-pressed'],'true');
   assert.equal(history.stats.requests.length,requestsBeforeToggle,'Toggling uses loaded station archives');
+  const temperatureChart=history.nodes.get('history-temperature-chart'),rainChart=history.nodes.get('history-rain-chart');
+  temperatureChart.onpointerdown({clientX:180,clientY:20,pointerId:1,pointerType:'touch',button:0});
+  const cursorBefore=history.nodes.get('history-temperature-cursor').attributes.transform;
+  temperatureChart.onpointermove({clientX:181,clientY:80,pointerId:1,pointerType:'touch'});
+  assert.equal(history.nodes.get('history-temperature-cursor').attributes.transform,cursorBefore,'Vertical gestures remain scrolling');
+  temperatureChart.onpointerup();
+  rainChart.onpointermove({clientX:240,clientY:20,pointerType:'mouse'});
+  assert.equal(history.nodes.get('history-temperature-cursor').attributes.transform,history.nodes.get('history-rain-cursor').attributes.transform,'A single shared cursor follows both diagrams');
+  const inspection=history.nodes.get('history-inspection').textContent;
+  history.run('renderHistory()');
+  assert.equal(history.nodes.get('history-inspection').textContent,inspection,'Selection survives re-render without a jump');
+  assert(history.nodes.get('history-inspection').textContent.includes('Regen:'));
   let automaticCallback,automaticDelay,automaticLoads=0;
   history.context.setInterval=(callback,delay)=>{automaticCallback=callback;automaticDelay=delay;};
   history.context.reloadStation=force=>{assert.equal(force,true);automaticLoads++;return Promise.resolve();};
@@ -572,7 +567,7 @@ async function tests() {
   const version=sw.match(/const CACHE = '([^']+)'/)[1];
   vm.runInNewContext(sw,{
     URL,
-    self:{addEventListener(name,callback){listeners[name]=callback;},clients:{claim:async()=>{} }},
+    self:{addEventListener(name,callback){listeners[name]=callback;},clients:{claim:async()=>{} },location:{origin:'https://example.org'}},
     caches:{keys:async()=>['bresser-v1',version,'other-app-cache'],delete:async key=>deleted.push(key)}
   });
   let activation;
@@ -583,14 +578,11 @@ async function tests() {
   assert.equal(riverIntercepted,false,'Official gauge requests bypass the service-worker cache');
   assert(sw.includes('./assets/rhine-levels.jpg'));
   assert(fs.statSync(path.join(root,'assets/rhine-levels.jpg')).size>0);
-  let dataIntercepted=false;
-  listeners.fetch({request:{method:'GET',url:'https://example.org/weather/data/2026-11.json'},respondWith(){dataIntercepted=true;}});
-  assert.equal(dataIntercepted,false,'Station archives bypass the service-worker cache');
-  for(const name of ['app.js','styles.css','history.js']) {
+  for(const name of ['app.js','styles.css','mobile.css','history.js']) {
     const asset=html.match(new RegExp(name.replace('.','\\.')+'\\?v=\\d+'))[0];
     assert(sw.includes(asset),'Service worker and HTML asset versions match');
   }
-  console.log('PASS: five-day moon timeline, DST/year boundaries, 14 USNO full-moon references, Berlin full-moon dates, moon orientation/offline support, gauges, compass, slider, navigation, weather and service worker.');
+  console.log('PASS: mobile views, native slider, current/archive separation, shared markers, freshness, updates, forecasts, gauges, compass, moon/DST/full-moon references, rain, river and cache versions.');
 }
 
 function benchmark(code) {
