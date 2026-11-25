@@ -8,6 +8,15 @@ const WeatherHistory = (() => {
   const detailFormat=new Intl.DateTimeFormat('de-DE',{timeZone:TZ,dateStyle:'short',timeStyle:'short'});
   const number=new Intl.NumberFormat('de-DE',{maximumFractionDigits:1,minimumFractionDigits:1});
   const fmt=value=>Number.isFinite(value)?number.format(value):'—';
+  // Same Celsius thresholds and smooth transitions as the current gauge.
+  // Colors depend on the measured value, never on the selected chart bounds.
+  function temperatureColor(value) {
+    const blue=[50,135,230],green=[40,166,106],red=[236,85,71];
+    const warm=value>22,start=warm?green:blue,end=warm?red:green;
+    const fraction=Math.max(0,Math.min(1,(value-(warm?22:1))/6));
+    const blend=fraction*fraction*(3-2*fraction);
+    return '#'+start.map((channel,index)=>Math.round(channel+(end[index]-channel)*blend).toString(16).padStart(2,'0')).join('');
+  }
   const day=time=>dayFormat.format(new Date(time));
   function midnight(key) {
     const noon=Date.parse(key+'T12:00:00Z');
@@ -104,19 +113,21 @@ const WeatherHistory = (() => {
       (model.hours===168?'* Unvollständiger Kalendertag oder Messlücken; Stundenmittel können unvollständig sein. Min/Max aus Originalmessungen.':''));
     get('history-24').setAttribute('aria-pressed',String(model.hours===24));
     get('history-168').setAttribute('aria-pressed',String(model.hours===168));
-    const width=Math.max(220,Math.round(get('history-temperature-chart').getBoundingClientRect().width)),height=170;
-    const left=38,right=width-12,top=13,bottom=126;
-    const x=time=>left+(time-model.start)/(model.end-model.start)*(right-left);
+    const width=Math.max(220,Math.round(get('history-temperature-chart').getBoundingClientRect().width)),height=180;
     const values=model.points.flatMap(row=>[row.temperature,row.feels]).filter(Number.isFinite);
     const low=values.length?Math.floor(Math.min(...values)-1):0,high=values.length?Math.ceil(Math.max(...values)+1):10;
+    const rainMax=Math.max(1,...model.bins.map(bin=>bin.amount??0))*1.1;
+    const axisWidth=Math.max(...[low,high,rainMax].map(value=>fmt(value).length))*8.5+12;
+    const left=Math.max(48,axisWidth),right=width-12,top=13,bottom=136;
+    const x=time=>left+(time-model.start)/(model.end-model.start)*(right-left);
     const y=value=>bottom-(value-low)/(high-low)*(bottom-top);
     let ticks=[];
     if(model.hours===24)for(let time=Math.ceil(model.start/(6*HOUR))*6*HOUR;time<=model.end;time+=6*HOUR)ticks.push(time);
     else ticks=model.bins.map(bin=>(bin.start+bin.end)/2).filter((_,index)=>width>=440 || index%2===0);
-    const axes=(min,max)=>[0,.5,1].map(fraction=>{
+    const axes=(min,max)=>[0,.25,.5,.75,1].map(fraction=>{
       const yy=bottom-fraction*(bottom-top);
-      return `<path class="history-grid" d="M${left} ${yy}H${right}"/><text x="${left-5}" y="${yy+4}" text-anchor="end">${fmt(min+fraction*(max-min))}</text>`;
-    }).join('')+ticks.map(time=>`<text x="${x(time)}" y="148" text-anchor="middle">${model.hours===24?clockFormat.format(new Date(time)):dateFormat.format(new Date(time))}</text>`).join('');
+      return `<path class="history-grid" d="M${left} ${yy}H${right}"/><text class="history-y-label" x="${left-7}" y="${yy+5}" text-anchor="end">${fmt(min+fraction*(max-min))}</text>`;
+    }).join('')+ticks.map(time=>`<text x="${x(time)}" y="160" text-anchor="middle">${model.hours===24?clockFormat.format(new Date(time)):dateFormat.format(new Date(time))}</text>`).join('');
     function line(key) {
       const segments=[];let segment=[];let previous=null;
       for(const row of model.points) {
@@ -128,15 +139,32 @@ const WeatherHistory = (() => {
         previous=row;
       }
       if(segment.length)segments.push(segment);
-      return segments.map(segment=>{
+      return segments.map((segment,index)=>{
         const path=segment.map((row,index)=>(index?'L':'M')+x(row.time)+' '+y(row[key])).join(' ');
-        return (key==='temperature' && segment.length>1?`<path class="history-area" d="${path}L${x(segment.at(-1).time)} ${bottom}L${x(segment[0].time)} ${bottom}Z"/>`:'')+
+        let area='';
+        if(key==='temperature' && segment.length>1) {
+          const first=segment[0],last=segment.at(-1),id='history-temperature-fill-'+index;
+          const stops=[];
+          const stop=(time,value)=>stops.push(`<stop offset="${(time-first.time)/(last.time-first.time)}" stop-color="${temperatureColor(value)}"/>`);
+          segment.forEach((row,index)=>{
+            const previous=segment[index-1];
+            if(previous) {
+              // Include crossed palette boundaries so large changes still pass
+              // through green rather than blending directly from blue to red.
+              const thresholds=[1,7,22,28].filter(value=>value>Math.min(previous.temperature,row.temperature)&&value<Math.max(previous.temperature,row.temperature));
+              if(row.temperature<previous.temperature)thresholds.reverse();
+              for(const value of thresholds)stop(previous.time+(row.time-previous.time)*(value-previous.temperature)/(row.temperature-previous.temperature),value);
+            }
+            stop(row.time,row.temperature);
+          });
+          area=`<defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${x(first.time)}" x2="${x(last.time)}" y1="0" y2="0">${stops.join('')}</linearGradient></defs><path class="history-area" fill="url(#${id})" d="${path}L${x(last.time)} ${bottom}L${x(first.time)} ${bottom}Z"/>`;
+        }
+        return area+
           `<path class="history-${key}" d="${path}"/>`+segment.map(row=>`<circle class="history-point-${key}" cx="${x(row.time)}" cy="${y(row[key])}" r="${segment.length===1?2.7:1.3}"><title>${detailFormat.format(new Date(row.time))}: ${fmt(row[key])} °C${row.partial?' · Teilmittel':''}</title></circle>`).join('');
       }).join('');
     }
     const svg=(content,label)=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${label}">${content}</svg>`;
     get('history-temperature-chart').innerHTML=svg(axes(low,high)+line('temperature')+line('feels'),'Temperaturverlauf in Grad Celsius');
-    const rainMax=Math.max(1,...model.bins.map(bin=>bin.amount??0))*1.1;
     get('history-rain-chart').innerHTML=svg(axes(0,rainMax)+model.bins.map(bin=>{
       const xx=x(bin.start),w=Math.max(1,x(bin.end)-xx-2),h=bin.amount===null?0:bin.amount/rainMax*(bottom-top);
       return (bin.amount===null?`<text x="${xx+w/2}" y="${bottom-5}" text-anchor="middle">?</text>`:
@@ -164,6 +192,6 @@ const WeatherHistory = (() => {
     }
     text('history-inspection','Antippen oder mit der Maus erkunden · Tastatur: ← →');
   }
-  return {build,rows,rainDelta,midnight,day,render};
+  return {build,rows,rainDelta,midnight,day,render,temperatureColor};
 })();
 if(typeof module!=='undefined')module.exports=WeatherHistory;

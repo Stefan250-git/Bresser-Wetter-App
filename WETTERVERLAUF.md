@@ -1,5 +1,13 @@
 # Wetterverlauf – Umsetzung und Prüfung
 
+## Aktualisierung: Farbfläche und größere Achsen
+
+Die Fläche unter der Temperaturlinie verwendet dieselben absoluten Celsius-Farben wie der aktuelle Tacho: Blau bis 1 °C, weicher Übergang bis 7 °C zu Grün, Grün bis 22 °C und Übergang bis 28 °C zu Rot. Die Farbe folgt den einzelnen Messwerten entlang der Zeitachse und bleibt unabhängig von der dynamischen Y-Skala. Messlücken teilen auch die Farbfläche. Die Temperaturkurve bleibt orange und die gefühlte Temperatur grau gestrichelt.
+
+Beide Y-Achsen haben jetzt 14 statt 10 Pixel große, kräftigere Beschriftungen, fünf Skalenstriche und einen an die Zahlenbreite angepassten linken Rand. App- und Service-Worker-Assets verwenden Version 32. Die vorhandenen Regressionstests wurden erneut ausgeführt; die Farbzuordnung wird zusätzlich gegen sämtliche 240 Farbsegmente des aktuellen Tachos geprüft.
+
+Die erneute visuelle Browserprüfung dieser Anpassung konnte nicht ausgeführt werden: Computer Use stoppte, weil es die aktuelle Browser-URL nicht sicher bestimmen konnte. Die neuen Browserprüfungen für Schriftgröße und Begrenzung der Achsenbeschriftungen sind vorbereitet, wurden aber nicht ausgeführt. Die oben dokumentierten zwölf erfolgreichen Browseransichten beziehen sich auf die vorherige Version.
+
 ## 1. Bestandsanalyse
 
 - Statische GitHub-Pages-PWA ohne Buildsystem: `index.html`, `styles.css`, `app.js`, `sw.js`.

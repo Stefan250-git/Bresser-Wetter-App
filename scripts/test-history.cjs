@@ -1,6 +1,13 @@
 'use strict';
 const assert=require('node:assert/strict');
 const history=require('../history.js');
+const fs=require('node:fs'),path=require('node:path');
+const gaugeColors=[...fs.readFileSync(path.join(__dirname,'../index.html'),'utf8').matchAll(/stroke="(#[a-f0-9]+)" stroke-width="18"/g)].slice(0,240);
+assert.equal(gaugeColors.length,240);
+gaugeColors.forEach((match,index)=>assert.equal(history.temperatureColor(-20+(index+.5)/4),match[1],'History color matches current Celsius gauge'));
+assert.equal(history.temperatureColor(-30),'#3287e6');
+assert.equal(history.temperatureColor(15),'#28a66a');
+assert.equal(history.temperatureColor(45),'#ec5547');
 const H=3600000,now=Date.parse('2026-11-25T12:00:00Z');
 const row=(time,temperature=1,rain=0)=>({timestamp:new Date(time).toISOString(),temperature,rain_month:rain,rain_day:rain});
 const complete=Array.from({length:1009},(_,i)=>row(now-168*H+i*600000,i===1?-15:i===2?31:2,i/10));
@@ -43,4 +50,15 @@ const midnight=Date.parse('2026-12-01T00:00:00+01:00');
 assert.equal(history.rainDelta({...row(midnight-600000,1,12),time:midnight-600000},{...row(midnight,1,0),time:midnight}),null,'Month/day reset not treated as dry');
 const crosses=history.build([row(now-65*60000,1,0),row(now-55*60000,1,2)],24,now);
 assert.equal(crosses.total,null,'Nonzero intervals crossing bucket boundaries are not guessed');
+// An isolated renderer fixture verifies value-based fill even when the Y range
+// changes, and separate gradients preserve gaps between measured segments.
+const elements=new Map(),root={getElementById(id){if(!elements.has(id))elements.set(id,{setAttribute(){},getBoundingClientRect(){return {width:250};}});return elements.get(id);}};
+const colored=[-10,15,35,null,5,6].map((temperature,index)=>row(now-50*60000+index*600000,temperature));
+history.render(history.build(colored,24,now),colored.at(-1),root);
+const chart=elements.get('history-temperature-chart').innerHTML;
+assert.equal((chart.match(/<linearGradient /g)||[]).length,2,'A missing reading splits the filled area');
+for(const color of ['#3287e6','#28a66a','#ec5547'])assert(chart.includes('stop-color="'+color+'"'));
+assert(chart.includes('fill="url(#history-temperature-fill-0)"'));
+assert.equal((chart.match(/class="history-y-label"/g)||[]).length,5);
+assert.equal((elements.get('history-rain-chart').innerHTML.match(/class="history-y-label"/g)||[]).length,5);
 console.log('PASS: 24h/168h, original extrema, hourly means, rainfall sums/average, deduplication, missing values, gaps, resets, 23h/25h Berlin days and month boundaries.');

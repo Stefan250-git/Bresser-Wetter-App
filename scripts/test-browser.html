@@ -26,6 +26,12 @@
     check(card.previousElementSibling===current,'Position below last current measurement');
     check(Math.abs(card.getBoundingClientRect().width-current.getBoundingClientRect().width)<1,'Consistent card widths');
     check(doc.querySelectorAll('.history-chart svg').length===2,'Both SVG charts rendered');
+    for(const chart of doc.querySelectorAll('.history-chart')) {
+      const label=chart.querySelector('.history-y-label');
+      check(win.getComputedStyle(label).fontSize==='14px','Larger Y-axis labels');
+      check(chart.querySelectorAll('.history-y-label').length===5,'Five Y-axis divisions');
+      for(const tick of chart.querySelectorAll('.history-y-label'))check(tick.getBBox().x>=0,'Y-axis labels fit inside chart');
+    }
     const initial=doc.querySelector('#history-extremes').textContent;
     doc.querySelector('#history-168').click();
     check(doc.querySelector('#history-168').getAttribute('aria-pressed')==='true','7-day switch');
