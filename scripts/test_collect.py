@@ -10,6 +10,23 @@ from collect import archive_item, num, stat, parse_stamp, main
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_retry_fills_only_missing_counters_at_the_same_instant(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            first = {'timestamp': '2026-11-25T17:07:12Z', 'rain_day': None,
+                     'rain_month': None, 'rain_rate': 0, 'temperature': 0.8}
+            archive_item(first, directory)
+            archive_item(dict(first, rain_day=0, rain_month=2.8), directory)
+            # Later retry cannot rewrite known values, including measured zero.
+            archive_item(dict(first, rain_day=1, rain_month=5, temperature=99), directory)
+            rows = json.loads((directory / '2026-11.json').read_text())
+            latest = json.loads((directory / 'latest.json').read_text())
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0], latest)
+            self.assertEqual(latest['rain_day'], 0)
+            self.assertEqual(latest['rain_month'], 2.8)
+            self.assertEqual(latest['temperature'], 0.8)
+
     def test_real_weathercloud_period_labels_are_not_stale_measurements(self):
         fixture = json.loads((Path(__file__).parent / 'fixtures/weathercloud-rain.json').read_text())
         stamp = datetime.fromtimestamp(fixture['current']['epoch'], tz=timezone.utc)

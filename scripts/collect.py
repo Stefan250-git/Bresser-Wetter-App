@@ -66,13 +66,18 @@ def archive_item(item, directory=DATA):
     file = directory / f'{stamp.astimezone(LOCAL):%Y-%m}.json'
     rows = json.loads(file.read_text(encoding='utf8')) if file.exists() else []
     by_time = {parse_stamp(row['timestamp']): row for row in rows}
-    # Repeated/stale readings must not replace previously recorded counters.
-    by_time.setdefault(stamp, item)
+    # An identical instant may fill missing rain counters after a retry/fix,
+    # but must never replace a known value or create another measurement.
+    saved = by_time.setdefault(stamp, item)
+    for key in ('rain_day', 'rain_month'):
+        incoming = num(item.get(key))
+        if saved.get(key) is None and incoming is not None and incoming >= 0:
+            saved[key] = incoming
     write_json(file, [by_time[key] for key in sorted(by_time)])
     latest_file = directory / 'latest.json'
     latest = json.loads(latest_file.read_text(encoding='utf8')) if latest_file.exists() else None
-    if latest is None or parse_stamp(latest['timestamp']) < stamp:
-        write_json(latest_file, item, indent=2)
+    if latest is None or parse_stamp(latest['timestamp']) <= stamp:
+        write_json(latest_file, saved, indent=2)
     return file
 
 

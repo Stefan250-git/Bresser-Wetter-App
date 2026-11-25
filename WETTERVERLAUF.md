@@ -6,7 +6,7 @@ Am 25.11.2026 zeigte der direkte Vergleich der echten Weathercloud-Antwort mit `
 
 `stat()` prüft Summen jetzt gegen ihre Kalenderperiode; echte Momentanwerte behalten die Aktualitätsprüfung. UTC-Periodenbezeichnungen werden mit dem Berliner Kalenderdatum der Messung verglichen, auch während der ersten lokalen Stunde. Vorperioden, fehlende, negative und ungültige Werte bleiben ausgeschlossen. Eine reale, öffentliche Antwort liegt als kleine Regressionstest-Fixture unter `scripts/fixtures/weathercloud-rain.json`; sie dient ausschließlich Tests und wird nicht als historische Messreihe eingespielt.
 
-Lokal bestanden acht Python-Tests sowie die bestehenden JS-Verlaufs- und Oberflächentests. Der Sammler wurde mit der real aufgezeichneten Antwort bis zu `latest.json` und Monatsarchiv getestet: Tag 0,0 mm, Monat 2,8 mm, Intensität 0,0 mm/h. Bereits entstandene historische Lücken werden nicht mit heutigen Summen rückwirkend aufgefüllt. Frontend, Cache und Diagrammgestaltung benötigen für diese Korrektur keine Änderung.
+Lokal bestanden neun Python-Tests sowie die bestehenden JS-Verlaufs- und Oberflächentests. Der Sammler wurde mit der real aufgezeichneten Antwort bis zu `latest.json` und Monatsarchiv getestet: Tag 0,0 mm, Monat 2,8 mm, Intensität 0,0 mm/h. Ein erneuter Abruf desselben Stationszeitpunkts darf ausschließlich noch fehlende Regenzähler ergänzen; vorhandene Werte, einschließlich gemessener Null, bleiben unverändert. Bereits entstandene historische Lücken werden nicht mit heutigen Summen rückwirkend aufgefüllt. Frontend, Cache und Diagrammgestaltung benötigen für diese Korrektur keine Änderung.
 
 ## Aktualisierung: klare Diagrammtitel und Zeitgrenzen
 
