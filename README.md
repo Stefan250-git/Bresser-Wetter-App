@@ -72,6 +72,12 @@ Die drei fotorealistischen Darstellungen sind KI-generierte Symbolbilder, keine 
 
 Der Trend vergleicht den aktuellen Wasserstand mit der PEGELONLINE-Messung von einer Stunde zuvor: Pfeil und Steigend/Fallend/Gleichbleibend sowie die Änderung in Zentimetern. Der Vergleich orientiert sich am Zeitstempel des aktuellen Messwerts, auch über Tages- und Zeitumstellungsgrenzen hinweg. Fehlt der Vergleichswert (maximal zwei Minuten Zeitabweichung), erscheint „Trend nicht verfügbar“. Ein Ausfall der historischen Daten blendet den aktuellen Wasserstand nicht aus.
 
+## Mobile Oberfläche und Wiederherstellung
+
+Die App trennt „Jetzt & Verlauf“ vom Archiv. Direkter Stundenregler, gemeinsame Messpunktanzeige, drei Prognosetage, Datenfrische und ein ausdrücklich gekennzeichneter Offline-Letztstand unterstützen den täglichen Gebrauch. [UX-Konzept, erhaltene Ideen und Prüfergebnisse](UX-REDESIGN.md).
+
+Der vorherige App-Stand ist durch den Git-Tag `restore/2026-11-25-before-ux-redesign` gesichert. Neue Messdaten bleiben beim Zurücksetzen des App-Codes erhalten; die Anleitung steht in der UX-Dokumentation.
+
 ## Wetterverlauf: 24 Stunden und 7 Tage
 
 Die gemeinsame Verlaufskarte steht direkt unter der aktuellen Temperatur samt Messzeitpunkt. Sie zeigt echte Stationsmessungen, Stundenmittel in der Wochenansicht und transparent gekennzeichnete Regen-Teilsummen. Umschalten benötigt keine weiteren API-Aufrufe.

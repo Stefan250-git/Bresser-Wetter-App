@@ -1,5 +1,7 @@
 # Wetterverlauf – Umsetzung und Prüfung
 
+Aktueller UX-Stand: Version 35 trennt aktuelle Wetterwerte und Archiv, ergänzt gemeinsame Diagrammmarker und kennzeichnet offline gespeicherte Stationsdaten. Details, Ideensicherung, Wiederherstellungstag und die genaue Testgrenze stehen in [UX-REDESIGN.md](UX-REDESIGN.md). Die folgenden Abschnitte dokumentieren die vorausgegangenen Ausbauschritte.
+
 ## Fehlerkorrektur: aktuelle Regenwerte trotz gewählter Archivstunde
 
 Die Übertragungskorrektur allein reichte nicht aus: Ein vollständiger Durchlauf des Frontends mit den echten archivierten Daten und `latest.json` reproduzierte bei der Standardstunde 12:00 weiterhin `—` für Tag und Monat. Die Niederschlagskarte hatte ihre Zähler aus der gewählten Archivstunde statt aus der aktuellen Messung gelesen. Bei heutigen Daten verwendet sie jetzt den neuesten Stationszeitpunkt inklusive `latest.json`, auch wenn das Monatsarchiv diesen noch nicht enthält. Ältere gewählte Tage verwenden weiterhin ihre historische Messstunde. Der Messzeitpunkt der Niederschlagskarte steht unmittelbar bei den Werten.

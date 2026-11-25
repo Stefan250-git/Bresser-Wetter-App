@@ -5,9 +5,12 @@ const WeatherHistory = (() => {
   const dayFormat=new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'});
   const clockFormat=new Intl.DateTimeFormat('de-DE',{timeZone:TZ,hour:'2-digit',minute:'2-digit'});
   const dateFormat=new Intl.DateTimeFormat('de-DE',{timeZone:TZ,weekday:'short',day:'2-digit',month:'2-digit'});
+  const weekdayFormat=new Intl.DateTimeFormat('de-DE',{timeZone:TZ,weekday:'short'});
+  const monthDayFormat=new Intl.DateTimeFormat('de-DE',{timeZone:TZ,day:'2-digit',month:'2-digit'});
   const detailFormat=new Intl.DateTimeFormat('de-DE',{timeZone:TZ,dateStyle:'short',timeStyle:'short'});
   const number=new Intl.NumberFormat('de-DE',{maximumFractionDigits:1,minimumFractionDigits:1});
   const fmt=value=>Number.isFinite(value)?number.format(value):'—';
+  const inspections=new WeakMap();
   // Same Celsius thresholds and smooth transitions as the current gauge.
   // Colors depend on the measured value, never on the selected chart bounds.
   function temperatureColor(value) {
@@ -114,12 +117,14 @@ const WeatherHistory = (() => {
     get('history-feels-legend').hidden=!model.points.some(row=>Number.isFinite(row.feels));
     get('history-24').setAttribute('aria-pressed',String(model.hours===24));
     get('history-168').setAttribute('aria-pressed',String(model.hours===168));
-    const width=Math.max(220,Math.round(get('history-temperature-chart').getBoundingClientRect().width)),height=model.hours===168?196:180;
+    const width=Math.max(220,Math.round(get('history-temperature-chart').getBoundingClientRect().width));
+    const fontScale=typeof getComputedStyle==='function' && root.documentElement?Math.max(1,parseFloat(getComputedStyle(root.documentElement).fontSize)/16):1;
     const values=model.points.flatMap(row=>[row.temperature,row.feels]).filter(Number.isFinite);
     const low=values.length?Math.floor(Math.min(...values)-1):0,high=values.length?Math.ceil(Math.max(...values)+1):10;
     const rainMax=Math.max(1,...model.bins.map(bin=>bin.amount??0))*1.1;
-    const axisWidth=Math.max(...[low,high,rainMax].map(value=>fmt(value).length))*8.5+12;
-    const left=Math.max(48,axisWidth),right=width-12,top=13,bottom=136;
+    const axisWidth=Math.max(...[low,high,rainMax].map(value=>fmt(value).length))*8.5*fontScale+12;
+    const left=Math.max(48*fontScale,axisWidth),right=width-12,top=13*fontScale,bottom=top+123;
+    const tickY=bottom+24*fontScale,height=tickY+(model.hours===168?45:20)*fontScale;
     const x=time=>left+(time-model.start)/(model.end-model.start)*(right-left);
     const y=value=>bottom-(value-low)/(high-low)*(bottom-top);
     let ticks=[];
@@ -127,7 +132,7 @@ const WeatherHistory = (() => {
     else ticks=model.bins.map(bin=>(bin.start+bin.end)/2).filter((_,index)=>width>=440 || index%2===0);
     // Always label both exact window boundaries; leave space around them so
     // neighbouring ticks cannot collide on narrow phones.
-    const tickGap=model.hours===24?52:86;
+    const tickGap=(model.hours===24?52:86)*fontScale;
     let previousX=left;
     ticks=ticks.filter(time=>{
       const position=x(time);
@@ -136,13 +141,14 @@ const WeatherHistory = (() => {
     });
     const timeLabels=[model.start,...ticks,model.end].map((time,index)=>{
       const edge=index===0?'start':index===ticks.length+1?'end':null;
-      const label=model.hours===24?clockFormat.format(new Date(time)):dateFormat.format(new Date(time));
-      const clock=model.hours===168 && edge?`<tspan x="${x(time)}" dy="15">${clockFormat.format(new Date(time))}</tspan>`:'';
-      return `<text class="history-x-label${edge?' history-time-'+edge:''}" x="${x(time)}" y="160" text-anchor="${edge||'middle'}">${label}${clock}</text>`;
+      const date=new Date(time);
+      const label=model.hours===24?clockFormat.format(date):edge?weekdayFormat.format(date):dateFormat.format(date);
+      const clock=model.hours===168 && edge?`<tspan x="${x(time)}" dy="${15*fontScale}">${monthDayFormat.format(date)}</tspan><tspan x="${x(time)}" dy="${15*fontScale}">${clockFormat.format(date)}</tspan>`:'';
+      return `<text class="history-x-label${edge?' history-time-'+edge:''}" x="${x(time)}" y="${tickY}" text-anchor="${edge||'middle'}">${label}${clock}</text>`;
     }).join('');
     const axes=(min,max)=>[0,.25,.5,.75,1].map(fraction=>{
       const yy=bottom-fraction*(bottom-top);
-      return `<path class="history-grid" d="M${left} ${yy}H${right}"/><text class="history-y-label" x="${left-7}" y="${yy+5}" text-anchor="end">${fmt(min+fraction*(max-min))}</text>`;
+      return `<path class="history-grid" d="M${left} ${yy}H${right}"/><text class="history-y-label" x="${left-7}" y="${yy+5*fontScale}" text-anchor="end">${fmt(min+fraction*(max-min))}</text>`;
     }).join('')+timeLabels;
     function line(key) {
       const segments=[];let segment=[];let previous=null;
@@ -180,33 +186,65 @@ const WeatherHistory = (() => {
       }).join('');
     }
     const svg=(content,label)=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${label}">${content}</svg>`;
-    get('history-temperature-chart').innerHTML=svg(axes(low,high)+line('temperature')+line('feels'),'Temperaturverlauf in Grad Celsius');
+    const cursor=kind=>`<g class="history-marker" id="history-${kind}-cursor" visibility="hidden"><path class="history-cursor" d="M0 ${top}V${bottom}"/>${kind==='temperature'?'<circle class="history-selected-point" id="history-selected-point" cx="0" cy="0" r="4"/>':''}</g>`;
+    get('history-temperature-chart').innerHTML=svg(axes(low,high)+line('temperature')+line('feels')+cursor('temperature'),'Temperaturverlauf in Grad Celsius');
     get('history-rain-chart').innerHTML=svg(axes(0,rainMax)+model.bins.map(bin=>{
       const xx=x(bin.start),w=Math.max(1,x(bin.end)-xx-2),h=bin.amount===null?0:bin.amount/rainMax*(bottom-top);
       return (bin.amount===null?`<text x="${xx+w/2}" y="${bottom-5}" text-anchor="middle">?</text>`:
         `<rect class="history-bar" opacity="${bin.partial ? .65 : 1}" x="${xx+1}" y="${bottom-Math.max(1,h)}" width="${w}" height="${Math.max(1,h)}"><title>${detailFormat.format(new Date(bin.start))}: ${fmt(bin.amount)} mm${bin.partial?' · unvollständig':''}</title></rect>`)+
         (model.hours===168 && bin.partial?`<text x="${xx+w/2}" y="${bottom+11}" text-anchor="middle">*</text>`:'');
-    }).join('')+(model.total===0 || model.total===null?`<text class="history-rain-state" x="${(left+right)/2}" y="${(top+bottom)/2}" text-anchor="middle">${model.total===0?'Erfasst: 0,0 mm':'Keine Intervallwerte'}</text>`:''),'Niederschlagsmengen in Millimeter; Fragezeichen bedeuten fehlende Daten');
-    let selected=model.end;
+    }).join('')+(model.total===0 || model.total===null?`<text class="history-rain-state" x="${(left+right)/2}" y="${(top+bottom)/2}" text-anchor="middle">${model.total===0?'Erfasst: 0,0 mm':'Keine Intervallwerte'}</text>`:'')+cursor('rain'),'Niederschlagsmengen in Millimeter; Fragezeichen bedeuten fehlende Daten');
+    const state=inspections.get(root)||{time:null};inspections.set(root,state);
+    let selected=state.time??model.end,touch=null;
     function inspect(time) {
       selected=Math.max(model.start,Math.min(model.end,time));
       const nearest=model.points.reduce((best,row)=>!best||Math.abs(row.time-selected)<Math.abs(best.time-selected)?row:best,null);
       const close=nearest && Math.abs(nearest.time-selected)<=(model.hours===24?GAP:HOUR/2);
+      // Display the actual measurement/hourly-mean timestamp, never a made-up
+      // timestamp carrying a nearby reading's temperature.
+      if(close)selected=nearest.time;
+      state.time=selected;
       const bin=model.bins.find(bin=>selected>=bin.start && selected<=bin.end);
-      text('history-inspection',detailFormat.format(new Date(selected))+' · Temperatur '+fmt(close?nearest.temperature:null)+' °C · gefühlt '+fmt(close?nearest.feels:null)+' °C'+
-        (close&&nearest.partial?' (Teilmittel)':'')+' · Regen '+fmt(bin?.amount)+' mm'+(bin?.partial?' (unvollständig)':''));
+      for(const kind of ['temperature','rain']){
+        get('history-'+kind+'-cursor').setAttribute('transform','translate('+x(selected)+' 0)');
+        get('history-'+kind+'-cursor').setAttribute('visibility','visible');
+      }
+      const point=get('history-selected-point'),known=close&&Number.isFinite(nearest.temperature);
+      point.setAttribute('visibility',known?'visible':'hidden');
+      if(known)point.setAttribute('cy',String(y(nearest.temperature)));
+      const rain=Number.isFinite(bin?.amount)?fmt(bin.amount)+' mm'+(bin.partial?' (Teilmenge)':''):'keine Messung';
+      text('history-inspection',detailFormat.format(new Date(selected))+' · '+(known?fmt(nearest.temperature)+' °C':'Temperatur unbekannt')+
+        (close&&Number.isFinite(nearest.feels)?' · gefühlt '+fmt(nearest.feels)+' °C':'')+
+        (model.hours===168?' · '+(close&&nearest.partial?'Teilmittel':'Stundenmittel'):'')+' · Regen: '+rain);
     }
     for(const id of ['history-temperature-chart','history-rain-chart']) {
       const chart=get(id);
-      chart.onpointermove=chart.onpointerdown=event=>{
+      const timeAt=event=>{
         const rect=chart.getBoundingClientRect();
-        inspect(model.start+Math.max(0,Math.min(1,((event.clientX-rect.left)*width/rect.width-left)/(right-left)))*(model.end-model.start));
+        return model.start+Math.max(0,Math.min(1,((event.clientX-rect.left)*width/rect.width-left)/(right-left)))*(model.end-model.start);
       };
+      chart.onpointerdown=event=>{
+        if(event.isPrimary===false || (event.button!==undefined&&event.button!==0))return;
+        touch={id:event.pointerId,x:event.clientX,y:event.clientY,cancelled:false};inspect(timeAt(event));
+      };
+      chart.onpointermove=event=>{
+        if(event.pointerType==='touch'){
+          if(!touch || touch.id!==event.pointerId || touch.cancelled)return;
+          const dx=Math.abs(event.clientX-touch.x),dy=Math.abs(event.clientY-touch.y);
+          if(dy>8 && dy>dx){touch.cancelled=true;return;}
+          if(dx<8)return;
+        }
+        inspect(timeAt(event));
+      };
+      chart.onpointerup=chart.onpointercancel=()=>{touch=null;};
       chart.onkeydown=event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
-        event.preventDefault();inspect(event.key==='Home'?model.start:event.key==='End'?model.end:selected+(event.key==='ArrowLeft'?-1:1)*(model.hours===24?600000:HOUR));
+        event.preventDefault();
+        const forward=event.key==='ArrowRight';
+        const next=forward?model.points.find(row=>row.time>selected):[...model.points].reverse().find(row=>row.time<selected);
+        inspect(event.key==='Home'?model.start:event.key==='End'?model.end:next?.time??selected+(forward?1:-1)*(model.hours===24?600000:HOUR));
       }};
     }
-    text('history-inspection','');
+    inspect(state.time??model.points.at(-1)?.time??model.end);
   }
   return {build,rows,rainDelta,midnight,day,render,temperatureColor};
 })();

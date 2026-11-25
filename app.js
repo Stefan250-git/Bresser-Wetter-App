@@ -21,12 +21,14 @@ $('date').value=chosenDay;$('date').max=dateBerlin();$('next').disabled=true;
 const hourTime = hour => String(hour).padStart(2,'0')+':00';
 const hourLabel = hour => hour === 24 ? '24:00 Uhr (Tagesende)' : hourTime(hour)+' Uhr';
 function updateHourControl() {
+  $('archive-hour-label').textContent=hourLabel(chosenHour);
+  $('hour-back').disabled=chosenHour===0;$('hour-forward').disabled=chosenHour===24;
   if ($('hour').value !== String(chosenHour)) $('hour').value = String(chosenHour);
   $('hour').setAttribute('aria-valuetext', hourLabel(chosenHour));
   $('hour-value').textContent = String(chosenHour);
   $('hour-preview').textContent = String(chosenHour);
   $('hour-control').style.setProperty('--hour-position', (chosenHour / 24 * 100)+'%');
-  $('hour-control').style.setProperty('--hour-offset', (28 - chosenHour / 24 * 56)+'px');
+  $('hour-control').style.setProperty('--hour-offset', (24 - chosenHour / 24 * 48)+'px');
 }
 let hourRenderFrame = null;
 function flushHourSelection() {
@@ -46,73 +48,31 @@ function selectHour(value) {
     renderSelection();
   });
 }
-// Pointer changes require a continuous two-second hold. Keyboard input stays native.
-let hourPress = null;
-function hourFromPointer(clientX, offset=0) {
-  const rect=$('hour').getBoundingClientRect();
-  return Math.max(0,Math.min(24,Math.round((clientX-rect.left-28-offset)/Math.max(1,rect.width-56)*24)));
+// Native range input: direct touch, mouse and keyboard; no long-press gate.
+function endHourPress(){flushHourSelection();}
+$('hour').oninput=event=>selectHour(event.target.value);
+$('hour').onchange=flushHourSelection;
+$('hour').onpointerup=flushHourSelection;
+$('hour').onpointercancel=flushHourSelection;
+$('hour-back').onclick=()=>{selectHour(Math.max(0,chosenHour-1));flushHourSelection();};
+$('hour-forward').onclick=()=>{selectHour(Math.min(24,chosenHour+1));flushHourSelection();};
+let activeView='today';
+function switchView(view){
+  if(!['today','archive'].includes(view))return;
+  activeView=view;
+  $('view-today').hidden=view!=='today';$('view-archive').hidden=view!=='archive';
+  $('nav-today').setAttribute('aria-pressed',String(view==='today'));
+  $('nav-archive').setAttribute('aria-pressed',String(view==='archive'));
+  if(view==='today')renderHistory();else renderSelection();
+  if(typeof window!=='undefined')window.scrollTo({top:0,behavior:'instant'});
 }
-function endHourPress(event) {
-  const press=hourPress;
-  if (!press || (event?.pointerId !== undefined && event.pointerId !== press.id)) return;
-  hourPress=null;
-  clearTimeout(press.timer);
-  $('hour-control').dataset.pressState='idle';
-  if (press.active) flushHourSelection();
-  if ($('hour').hasPointerCapture(press.id)) $('hour').releasePointerCapture(press.id);
-}
-$('hour').onpointerdown = event => {
-  if (event.isPrimary === false || event.button !== 0) return;
-  event.preventDefault();
-  endHourPress();
-  $('hour').focus({preventScroll:true});
-  const rect=$('hour').getBoundingClientRect();
-  const center=rect.left+28+(rect.width-56)*chosenHour/24;
-  const onThumb=Math.abs(event.clientX-center)<=28 && Math.abs(event.clientY-rect.top-rect.height/2)<=28;
-  const press={id:event.pointerId,startX:event.clientX,startY:event.clientY,x:event.clientX,
-    offset:onThumb?event.clientX-center:0,active:false,timer:null};
-  hourPress=press;
-  $('hour-control').dataset.pressState='holding';
-  $('hour').setPointerCapture(press.id);
-  press.timer=setTimeout(() => {
-    if (hourPress !== press) return;
-    press.active=true;
-    $('hour-control').dataset.pressState='dragging';
-    selectHour(hourFromPointer(press.x,press.offset));
-  },2000);
-};
-$('hour').onpointermove = event => {
-  const press=hourPress;
-  if (!press || press.id !== event.pointerId) return;
-  if (!press.active && Math.hypot(event.clientX-press.startX,event.clientY-press.startY)>12) {
-    endHourPress(event);return;
-  }
-  press.x=event.clientX;
-  if (press.active) { event.preventDefault();selectHour(hourFromPointer(press.x,press.offset)); }
-};
-$('hour').onpointerup = event => {
-  if (!hourPress || hourPress.id !== event.pointerId) return;
-  event.preventDefault();
-  if (hourPress.active) selectHour(hourFromPointer(event.clientX,hourPress.offset));
-  endHourPress(event);
-};
-$('hour').onpointercancel=endHourPress;
-$('hour').onlostpointercapture=endHourPress;
-$('hour').onblur=()=>endHourPress();
-$('hour').onkeydown=()=>endHourPress();
-$('hour').onclick=event=>event.preventDefault();
-$('hour').oncontextmenu=event=>event.preventDefault();
-$('hour-ruler').onpointerdown=$('hour').onpointerdown;
-$('hour-ruler').oncontextmenu=$('hour').oncontextmenu;
+$('nav-today').onclick=()=>switchView('today');
+$('nav-archive').onclick=()=>switchView('archive');
+$('archive-today').onclick=()=>{if(chosenDay!==dateBerlin())changeDate(dateBerlin());else renderSelection();};
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){endHourPress();stopCompassSway();}
-  else { renderMoon();renderCurrentWeather();loadRelevant(true).then(render);forecast();loadRiver(); }
+  else { renderMoon();renderCurrentWeather();loadRelevant(true).then(render);forecast();loadRiver();checkForAppUpdate(); }
 });
-$('hour').oninput = event => {
-  if (hourPress) { updateHourControl();return; }
-  selectHour(event.target.value);
-};
-$('hour').onchange = flushHourSelection;
 function changeDate(v) {
   if (!v || v > dateBerlin() || v === chosenDay) return;
   endHourPress();
@@ -124,10 +84,30 @@ $('prev').onclick=()=>changeDate(addDay(chosenDay,-1));$('next').onclick=()=>cha
 $('refresh').onclick = async () => {
   if ($('refresh').disabled) return;
   $('refresh').disabled=true;$('refresh').setAttribute('aria-busy','true');
-  try { await Promise.all([loadRelevant(true),forecast(),loadRiver(true)]);render(); }
+  try { checkForAppUpdate();await Promise.all([loadRelevant(true),forecast(),loadRiver(true)]);render(); }
   finally { $('refresh').disabled=false;$('refresh').setAttribute('aria-busy','false'); }
 };
-async function fetchJson(path){const r=await fetch(path,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);return await r.json()}
+let latestOffline=false,dataFailed=false;
+async function fetchJson(path){
+  const r=await fetch(path,{cache:'no-store'});
+  if(!r.ok)throw Error('HTTP '+r.status);
+  if(String(path).includes('data/latest.json'))latestOffline=r.headers?.get('X-Bresser-Offline')==='true';
+  return await r.json();
+}
+function renderStationStatus(){
+  const epoch=Date.parse(live?.timestamp),minutes=Math.max(0,Math.floor((Date.now()-epoch)/60000));
+  let state='fresh',label='';
+  if(!Number.isFinite(epoch)){state='loading';label=dataFailed?'Stationsdaten nicht erreichbar':'Noch keine Stationsmessung';}
+  else{
+    const age=minutes<1?'gerade eben':minutes<60?'vor '+minutes+' Min.':minutes<1440?'vor '+Math.floor(minutes/60)+' Std.':'vor '+Math.floor(minutes/1440)+' Tagen';
+    const offline=latestOffline || (typeof navigator!=='undefined' && navigator.onLine===false);
+    state=offline || dataFailed?'offline':minutes>=30?'stale':'fresh';
+    label=(offline?'Offline · ':dataFailed?'Abruf fehlgeschlagen · ':minutes>=30?'Ältere Messung · ':'Messung ')+age;
+  }
+  $('status').textContent=label;$('status').dataset.state=state;
+  $('status').setAttribute('title',Number.isFinite(epoch)?'Stationsmessung: '+readingFormatter.format(new Date(epoch)):'Keine Stationsmessung vorhanden');
+}
+
 const RIVER_UUID='f33c3cc9-dc4b-4b77-baa9-5a5f10704398';
 const RIVER_URL='https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/'+RIVER_UUID+'.json?includeTimeseries=true&includeCurrentMeasurement=true';
 let riverReading=null,riverFailed=false,riverPending=null,riverFetchedAt=0,riverTrend=null;
@@ -239,9 +219,7 @@ async function loadRelevant(force=false) {
   try { nextLive=await fetchJson('data/latest.json'); } catch { failed=true; }
   if (request !== dataRequest) return;
   if (!failed) live=nextLive;
-  if (failed && live?.timestamp) $('status').textContent='Aktualisierung fehlgeschlagen \u00b7 letzter Messpunkt: '+formatUpdated(live.timestamp);
-  else if (!live&&!Object.values(archive).some(rows=>rows.length)) $('status').textContent='Keine Messdaten archiviert \u00b7 Messwertsammler noch nicht eingerichtet';
-  else $('status').textContent=live?.timestamp?'Zuletzt aktualisiert: '+formatUpdated(live.timestamp):'Archivdaten geladen \u00b7 kein aktueller Zeitstempel';
+  dataFailed=failed;renderStationStatus();
 }
 const emptyRecords = Object.freeze([]),recordTimes = new WeakMap(),monthDays = new Map();
 function records(month){return archive[month]||emptyRecords;}
@@ -521,7 +499,7 @@ function renderMoon(date=new Date()) {
 
 // Fixed Celsius scale shared by both speedometers; numeric values remain exact.
 function setGaugeReading(id,value,negativeOffset) {
-  const text=fmt(value).replace(',', '.');
+  const text=fmt(value);
   $(id).textContent=text;
   $(id).setAttribute('x',String(text.startsWith('-')?160-negativeOffset:160));
 }
@@ -538,31 +516,41 @@ function updateTemperatureGauge(kind, value,feels) {
   gauge.nextElementSibling.textContent = 'Gemessene Temperatur: '+(available?fmt(value)+' \u00b0C':'keine Messung')+'. Gef\u00fchlte Temperatur: '+(Number.isFinite(feels)?fmt(feels)+' \u00b0C':'nicht verf\u00fcgbar');
 }
 
+function rainComparison(day,record){
+  const priorDay=(+day.slice(0,4)-1)+day.slice(4),previous=latestForDay(priorDay);
+  const current=record?.rain_month,old=previous?.rain_month;
+  if(!Number.isFinite(current)||!Number.isFinite(old))return 'Keine vergleichbaren Vorjahresdaten.';
+  return 'Vorjahr bis '+priorDay.slice(5).replace('-','.')+'.: '+fmt(old)+' mm · Differenz '+fmt(current-old)+' mm'+(old>0?' ('+fmt((current-old)/old*100,0)+' %)':'');
+}
+function renderRainValues(prefix,day,record){
+  const week=record?periodRain(day,'week',record.timestamp):null;
+  $(prefix+'rainrate').textContent=fmt(record?.rain_rate);
+  $(prefix+'rainday').textContent=fmt(record?.rain_day);
+  $(prefix+'rainweek').textContent=fmt(week);
+  $(prefix+'rainmonth').textContent=fmt(record?.rain_month);
+}
 function renderSelection(){
-const time=hourTime(chosenHour),r=nearest(chosenDay,time);
-$('selected-time').textContent = selectedDateFormatter.format(new Date(chosenDay+'T12:00:00Z')) + ' · ' + hourLabel(chosenHour);
-updateTemperatureGauge('selected', r?.temperature,r?.feels);
-$('selected-hint').textContent=r?'Messwert am gewählten Zeitpunkt (±20 Minuten)':'Keine Stationsmessung zu dieser Uhrzeit (±20 Minuten).';$('reading-time').textContent=r?'Gemessen: '+readingFormatter.format(new Date(r.timestamp)):'Keine Messung vorhanden';
-// Today's rain card is a current overview. The hour slider selects historical
-// temperature; it must not hide newly collected rain counters behind noon.
-const rain=chosenDay===dateBerlin()?latestForDay(chosenDay):r,until=rain?.timestamp;
-$('rainrate').textContent=fmt(rain?.rain_rate);$('rainday').textContent=fmt(rain?.rain_day);$('rainweek').textContent=fmt(rain?periodRain(chosenDay,'week',until):null);$('rainmonth').textContent=fmt(rain?.rain_month);
-$('rain-time').textContent=rain?'Stand: '+readingFormatter.format(new Date(rain.timestamp)):'Keine Messung zum gewählten Zeitpunkt';
-const priorDay=(+chosenDay.slice(0,4)-1)+chosenDay.slice(4),prev=latestForDay(priorDay,until?priorDay+'T23:59:59Z':null);const curr=rain?.rain_month,old=prev?.rain_month;
-$('compare').textContent=Number.isFinite(curr)&&Number.isFinite(old)?`Vorjahr bis ${priorDay.slice(5).replace('-','.')}.: ${fmt(old)} mm · ${fmt(curr-old)} mm (${old>0?fmt((curr-old)/old*100,0)+' %':'Prozentvergleich nicht möglich'})`:'Vorjahr: Keine vergleichbaren Stationsdaten';
+  const r=nearest(chosenDay,hourTime(chosenHour));
+  $('selected-time').textContent=selectedDateFormatter.format(new Date(chosenDay+'T12:00:00Z'))+' · '+hourLabel(chosenHour);
+  updateTemperatureGauge('selected',r?.temperature,r?.feels);
+  $('selected-hint').textContent=r?'Nächste Stationsmessung zur Auswahl (±20 Minuten).':'Keine Messung zu dieser Uhrzeit (±20 Minuten).';
+  $('reading-time').textContent=r?'Gemessen: '+readingFormatter.format(new Date(r.timestamp)):'Keine Messung vorhanden';
+  renderRainValues('archive-',chosenDay,r);
+  $('archive-compare').textContent=rainComparison(chosenDay,r);
 }
 function renderCurrent(){
-  renderMoon();
-  renderCurrentWeather();
-  $('current-temp').textContent = fmt(live?.temperature).replace(',', '.');
-  updateTemperatureGauge('current', live?.temperature,live?.feels);
-
-  $('current-time').textContent = live?.timestamp
-    ? 'Messpunkt: ' + formatUpdated(live.timestamp) + ' Uhr'
-    : 'Noch keine aktuelle Messung';
-const isToday=chosenDay===dateBerlin();
-const wind=isToday?(readingTime(live)?.day===chosenDay?live:latestForDay(chosenDay)):null;
-renderWind(wind);
+  renderMoon();renderCurrentWeather();renderStationStatus();
+  updateTemperatureGauge('current',live?.temperature,live?.feels);
+  $('current-time').textContent=live?.timestamp?'Stationsmessung · '+readingFormatter.format(new Date(live.timestamp)):'Noch keine aktuelle Messung';
+  const today=dateBerlin(),reading=latestForDay(today);
+  $('date').max=today;$('next').disabled=chosenDay>=today;
+  const wind=readingTime(live)?.day===today?live:reading;
+  renderWind(wind);
+  renderRainValues('',today,reading);
+  $('rain-time').textContent=reading?'Stand: '+readingFormatter.format(new Date(reading.timestamp)):'Keine heutige Stationsmessung';
+  $('compare').textContent=rainComparison(today,reading);
+  $('now-rain').textContent=fmt(reading?.rain_day);
+  $('now-wind').textContent=fmt(wind?.wind_speed);
 }
 let historyHours=24;
 function renderHistory(){
@@ -584,9 +572,82 @@ function forecast(){
   forecastPending=loadForecast().finally(()=>{forecastPending=null;});
   return forecastPending;
 }
-async function loadForecast(){try{const url=new URL('https://api.open-meteo.com/v1/forecast');Object.entries({latitude:LAT,longitude:LON,timezone:TZ,forecast_days:4,wind_speed_unit:'kmh',current:'weather_code,is_day,wind_speed_10m,wind_gusts_10m',daily:'temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max'}).forEach(([k,v])=>url.searchParams.set(k,v));const x=await fetchJson(url);currentWeather=normalizeCurrentWeather(x);renderCurrentWeather();const d=x.daily,days=[1,2,3].map(i=>({date:d.time[i],min:d.temperature_2m_min[i],max:d.temperature_2m_max[i],rain:d.precipitation_sum[i],p:d.precipitation_probability_max[i],gust:d.wind_gusts_10m_max[i]}));if(days.some(x=>!x.date))throw Error('Unvollständige Prognose');const start=(d.temperature_2m_max[0]+d.temperature_2m_min[0])/2,end=(days[2].max+days[2].min)/2,diff=end-start;const trend=Math.abs(diff)<2?'Die Temperaturen bleiben ungefähr gleich.':diff>0?'Die Temperaturen werden voraussichtlich steigen.':'Die Temperaturen werden voraussichtlich sinken.';const rain=days.filter(x=>(x.rain??0)>=0.5||(x.p??0)>=60);const windy=days.filter(x=>(x.gust??0)>=50);const entries=[['Temperatur',trend],['Niederschlag',rain.length?`Niederschlag an ${rain.map(x=>new Date(x.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'short'})).join(', ')} erwartet.`:'Derzeit kein nennenswerter Niederschlag prognostiziert.'],['Wind / Sturm',windy.length?`Erhöhte Windböen möglich (bis ${fmt(Math.max(...windy.map(x=>x.gust)),0)} km/h).`:'Derzeit keine stärkeren Windböen prognostiziert.']];$('forecast').replaceChildren();for(const [name,description]of entries){let n=document.createElement('div');n.className='forecast-item';let b=document.createElement('strong');b.textContent=name;let p=document.createElement('p');p.textContent=description;n.append(b,p);$('forecast').append(n)}}catch(e){renderCurrentWeather();$('forecast').textContent='Prognose derzeit nicht verfügbar.'}}
+let forecastSnapshot=null,forecastFetchedAt=null;
+const forecastDayFormatter=new Intl.DateTimeFormat('de-DE',{timeZone:TZ,weekday:'short'});
+const forecastDateFormatter=new Intl.DateTimeFormat('de-DE',{timeZone:TZ,day:'2-digit',month:'2-digit'});
+function forecastSymbol(code){
+  if([95,96,99].includes(code))return ['ϟ','Gewitter'];
+  if(snowCodes.has(code))return ['❄','Schnee'];
+  if(rainCodes.has(code))return ['☂','Regen'];
+  if([45,48].includes(code))return ['≋','Nebel'];
+  if([0,1].includes(code))return ['☀','Sonnig'];
+  if([2,3].includes(code))return ['☁','Bewölkt'];
+  return ['—','Keine Wetterart verfügbar'];
+}
+function renderForecast(data){
+  const d=data?.daily;
+  if(!d?.time || d.time.length<4)throw Error('Unvollständige Prognose');
+  const cards=[];
+  for(let i=1;i<=3;i++){
+    if(!d.time[i] || !Number.isFinite(d.temperature_2m_min?.[i]) || !Number.isFinite(d.temperature_2m_max?.[i]))throw Error('Unvollständige Prognose');
+    const date=new Date(d.time[i]+'T12:00:00Z'),card=document.createElement('article');card.className='forecast-day';
+    const heading=document.createElement('h3');heading.textContent=i===1?'Morgen':forecastDayFormatter.format(date);
+    const day=document.createElement('span');day.className='forecast-date';day.textContent=forecastDateFormatter.format(date);
+    const symbol=document.createElement('span');symbol.className='forecast-symbol';const [icon,label]=forecastSymbol(d.weather_code?.[i]);
+    symbol.textContent=icon+'\uFE0E';symbol.setAttribute('role','img');symbol.setAttribute('aria-label',label);
+    const temperature=document.createElement('div');temperature.className='forecast-temperature';temperature.textContent=fmt(d.temperature_2m_max[i],0)+'°';
+    const minimum=document.createElement('small');minimum.textContent=' / '+fmt(d.temperature_2m_min[i],0)+'°';temperature.append(minimum);
+    temperature.setAttribute('aria-label','Höchstwert '+fmt(d.temperature_2m_max[i])+' Grad, Tiefstwert '+fmt(d.temperature_2m_min[i])+' Grad');
+    const rain=document.createElement('div');rain.className='forecast-rain';rain.textContent=fmt(d.precipitation_sum?.[i])+' mm';
+    const chance=document.createElement('span');chance.textContent=fmt(d.precipitation_probability_max?.[i],0)+' % Regen';rain.append(chance);
+    card.append(heading,day,symbol,temperature,rain);cards.push(card);
+  }
+  const start=(d.temperature_2m_max[0]+d.temperature_2m_min[0])/2,end=(d.temperature_2m_max[3]+d.temperature_2m_min[3])/2,diff=end-start;
+  const trend=!Number.isFinite(diff)?'':Math.abs(diff)<2?'Die Temperaturen bleiben ähnlich.':diff>0?'Es wird voraussichtlich wärmer.':'Es wird voraussichtlich kühler.';
+  const gusts=(d.wind_gusts_10m_max||[]).slice(1,4).filter(Number.isFinite),maxGust=gusts.length?Math.max(...gusts):null;
+  $('forecast').replaceChildren();$('forecast').append(...cards);
+  $('forecast-trend').textContent=trend+(maxGust>=50?' Böen bis '+fmt(maxGust,0)+' km/h möglich.':'');
+}
+async function loadForecast(){
+  try{
+    const url=new URL('https://api.open-meteo.com/v1/forecast');
+    Object.entries({latitude:LAT,longitude:LON,timezone:TZ,forecast_days:4,wind_speed_unit:'kmh',current:'weather_code,is_day,wind_speed_10m,wind_gusts_10m',daily:'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_gusts_10m_max'}).forEach(([key,value])=>url.searchParams.set(key,value));
+    const data=await fetchJson(url);
+    currentWeather=normalizeCurrentWeather(data);renderCurrentWeather();renderForecast(data);
+    forecastSnapshot=data;forecastFetchedAt=Date.now();
+    $('forecast-time').textContent='Open-Meteo · Modellwerte · Stand '+readingFormatter.format(new Date(forecastFetchedAt));
+  }catch{
+    renderCurrentWeather();
+    if(forecastSnapshot){$('forecast-time').textContent='Letzte Prognose · '+readingFormatter.format(new Date(forecastFetchedAt))+' · Aktualisierung nicht möglich';}
+    else{$('forecast').textContent='Vorhersage gerade nicht verfügbar.';$('forecast-trend').textContent='';$('forecast-time').textContent='Open-Meteo · Modellwerte';}
+  }
+}
+let appRegistration=null,appUpdate=null,reloadingApp=false;
+function showAppUpdate(worker){appUpdate=worker;$('update-banner').hidden=false;}
+function checkForAppUpdate(){if(appRegistration)appRegistration.update().catch(()=>{});}
+function setupAppUpdates(){
+  if(typeof navigator==='undefined'||!('serviceWorker' in navigator))return;
+  let hadController=Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(reloadingApp && typeof window!=='undefined'){reloadingApp=false;window.location.reload();}
+    else if(!hadController){hadController=true;loadRelevant(true).then(render);}
+  });
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(registration=>{
+    appRegistration=registration;if(registration.waiting)showAppUpdate(registration.waiting);
+    registration.addEventListener('updatefound',()=>{
+      const worker=registration.installing;
+      worker?.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)showAppUpdate(worker);});
+    });
+  }).catch(()=>{});
+}
+$('apply-update').onclick=()=>{
+  if(!appUpdate)return;
+  reloadingApp=true;$('apply-update').disabled=true;
+  appUpdate.postMessage({type:'SKIP_WAITING'});
+};
 setupCompassObserver();
-if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});updateHourControl();renderMoon();loadRelevant().then(render);forecast();loadRiver();
+setupAppUpdates();updateHourControl();renderMoon();loadRelevant().then(render);forecast();loadRiver();
+setInterval(()=>{if(!document.hidden)renderStationStatus();},60000);
 
 // Keep the current-weather icon fresh without polling while the app is hidden.
 setInterval(()=>{if(!document.hidden){loadRelevant(true).then(render);renderMoon();forecast();loadRiver();}},10*60*1000);

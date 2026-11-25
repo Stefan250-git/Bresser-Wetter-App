@@ -79,6 +79,6 @@ for(const hours of [24,168]) {
       if(hours===168)assert(label[1].includes('<tspan'),'Weekly endpoints retain both date and time');
     }
   }
-  assert.equal(elements.get('history-inspection').textContent,'','No persistent instruction text');
+  assert(elements.get('history-inspection').textContent.includes('Regen:'),'Shared selection readout remains visible');
 }
 console.log('PASS: 24h/168h, original extrema, hourly means, rainfall sums/average, deduplication, missing values, gaps, resets, 23h/25h Berlin days and month boundaries.');
