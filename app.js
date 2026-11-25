@@ -288,6 +288,8 @@ function latestForDay(day,limit) {
     const epoch=readingTime(record).epoch;
     if (epoch <= until && epoch > last) { latest=record;last=epoch; }
   }
+  const currentTime=readingTime(live);
+  if(currentTime?.day===day && currentTime.epoch<=until && currentTime.epoch>last)latest=live;
   return latest;
 }
 function periodRain(day,kind,limit) {
@@ -537,11 +539,16 @@ function updateTemperatureGauge(kind, value,feels) {
 }
 
 function renderSelection(){
-const time=hourTime(chosenHour),r=nearest(chosenDay,time),until=r?.timestamp;
+const time=hourTime(chosenHour),r=nearest(chosenDay,time);
 $('selected-time').textContent = selectedDateFormatter.format(new Date(chosenDay+'T12:00:00Z')) + ' · ' + hourLabel(chosenHour);
 updateTemperatureGauge('selected', r?.temperature,r?.feels);
-$('selected-hint').textContent=r?'Messwert am gewählten Zeitpunkt (±20 Minuten)':'Keine Stationsmessung zu dieser Uhrzeit (±20 Minuten).';$('reading-time').textContent=r?'Gemessen: '+readingFormatter.format(new Date(r.timestamp)):'Keine Messung vorhanden';$('rainrate').textContent=fmt(r?.rain_rate);$('rainday').textContent=fmt(periodRain(chosenDay,'day',until));$('rainweek').textContent=fmt(periodRain(chosenDay,'week',until));$('rainmonth').textContent=fmt(periodRain(chosenDay,'month',until));
-const priorDay=(+chosenDay.slice(0,4)-1)+chosenDay.slice(4),prev=latestForDay(priorDay,until?priorDay+'T23:59:59Z':null);const curr=periodRain(chosenDay,'month',until),old=prev?.rain_month;
+$('selected-hint').textContent=r?'Messwert am gewählten Zeitpunkt (±20 Minuten)':'Keine Stationsmessung zu dieser Uhrzeit (±20 Minuten).';$('reading-time').textContent=r?'Gemessen: '+readingFormatter.format(new Date(r.timestamp)):'Keine Messung vorhanden';
+// Today's rain card is a current overview. The hour slider selects historical
+// temperature; it must not hide newly collected rain counters behind noon.
+const rain=chosenDay===dateBerlin()?latestForDay(chosenDay):r,until=rain?.timestamp;
+$('rainrate').textContent=fmt(rain?.rain_rate);$('rainday').textContent=fmt(rain?.rain_day);$('rainweek').textContent=fmt(rain?periodRain(chosenDay,'week',until):null);$('rainmonth').textContent=fmt(rain?.rain_month);
+$('rain-time').textContent=rain?'Stand: '+readingFormatter.format(new Date(rain.timestamp)):'Keine Messung zum gewählten Zeitpunkt';
+const priorDay=(+chosenDay.slice(0,4)-1)+chosenDay.slice(4),prev=latestForDay(priorDay,until?priorDay+'T23:59:59Z':null);const curr=rain?.rain_month,old=prev?.rain_month;
 $('compare').textContent=Number.isFinite(curr)&&Number.isFinite(old)?`Vorjahr bis ${priorDay.slice(5).replace('-','.')}.: ${fmt(old)} mm · ${fmt(curr-old)} mm (${old>0?fmt((curr-old)/old*100,0)+' %':'Prozentvergleich nicht möglich'})`:'Vorjahr: Keine vergleichbaren Stationsdaten';
 }
 function renderCurrent(){

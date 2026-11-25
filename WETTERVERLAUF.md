@@ -1,5 +1,13 @@
 # Wetterverlauf – Umsetzung und Prüfung
 
+## Fehlerkorrektur: aktuelle Regenwerte trotz gewählter Archivstunde
+
+Die Übertragungskorrektur allein reichte nicht aus: Ein vollständiger Durchlauf des Frontends mit den echten archivierten Daten und `latest.json` reproduzierte bei der Standardstunde 12:00 weiterhin `—` für Tag und Monat. Die Niederschlagskarte hatte ihre Zähler aus der gewählten Archivstunde statt aus der aktuellen Messung gelesen. Bei heutigen Daten verwendet sie jetzt den neuesten Stationszeitpunkt inklusive `latest.json`, auch wenn das Monatsarchiv diesen noch nicht enthält. Ältere gewählte Tage verwenden weiterhin ihre historische Messstunde. Der Messzeitpunkt der Niederschlagskarte steht unmittelbar bei den Werten.
+
+Das Verlaufsdiagramm kennzeichnet gemessene Nullmengen ausdrücklich mit „Erfasst: 0,0 mm“. Fehlen alle berechenbaren Intervalle, erscheint „Keine Intervallwerte“; unbekannte Intervalle werden weiterhin nicht als trocken gewertet. Eine Monatssumme wird nicht als angebliche Stunden-/Wochensumme in die Balken übernommen. Zum geprüften Stand waren im Archiv nur Null-Differenzen des Regenzählers vorhanden.
+
+Mit den echten Daten zeigt das Frontend nun trotz ausgewählter 12-Uhr-Temperatur Tag 0,0 mm und Monat 2,8 mm sowie den aktuellen Niederschlags-Messzeitpunkt. Ein eigener Regressionstest prüft genau diesen Fall, Schieberegler, ein verspätetes Monatsarchiv und den Wechsel auf einen historischen Tag. Die JS-Tests und neun Python-Tests bestehen; der PWA-Cache wird auf Version 34 angehoben. Eine visuelle Prüfung auf echten Geräten bleibt offen.
+
 ## Fehlerkorrektur: fehlende Niederschlagssummen
 
 Am 25.11.2026 zeigte der direkte Vergleich der echten Weathercloud-Antwort mit `data/latest.json`: `rain_day_total=[1795564800,0]` und `rain_month_total=[1793491200,2.8]` waren verfügbar, wurden aber durch die 20-Minuten-Altersprüfung als `null` gespeichert. Diese Zeitstempel bezeichnen den Tages-/Monatsbeginn (25.11. bzw. 01.11., jeweils 00:00 UTC), nicht das Alter der aktuellen Statistikantwort. Seit der Einführung der Prüfung waren deshalb die Summen trotz erfolgreicher Sammelläufe ausgefallen. Die Intensität `rain_rate` wurde weiterhin übertragen.

@@ -61,6 +61,13 @@ for(const color of ['#3287e6','#28a66a','#ec5547'])assert(chart.includes('stop-c
 assert(chart.includes('fill="url(#history-temperature-fill-0)"'));
 assert.equal((chart.match(/class="history-y-label"/g)||[]).length,5);
 assert.equal((elements.get('history-rain-chart').innerHTML.match(/class="history-y-label"/g)||[]).length,5);
+history.render(history.build(complete,24,now),complete.at(-1),root);
+assert(!elements.get('history-rain-chart').innerHTML.includes('Erfasst: 0,0 mm'),'Positive rain is never labelled dry');
+history.render(history.build([row(now-600000),row(now)],24,now),row(now),root);
+assert(elements.get('history-rain-chart').innerHTML.includes('Erfasst: 0,0 mm'),'Measured dry intervals have an explicit readout');
+history.render(history.build([],24,now),null,root);
+assert(elements.get('history-rain-chart').innerHTML.includes('Keine Intervallwerte'));
+assert(!elements.get('history-rain-chart').innerHTML.includes('Erfasst: 0,0 mm'),'Missing observations never look dry');
 for(const hours of [24,168]) {
   history.render(history.build(colored,hours,now+37*60000),colored.at(-1),root);
   for(const id of ['history-temperature-chart','history-rain-chart']) {

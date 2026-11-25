@@ -10,7 +10,7 @@ const source = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const ids = [...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(ids).size, ids.length, 'Unique HTML IDs');
 
-function harness(code = source) {
+function harness(code = source, now = '2026-11-24T11:00:00Z') {
   let frameId = 0;
   let timerId=0,clock=0;
   const timers=new Map(),documentListeners={};
@@ -45,8 +45,8 @@ function harness(code = source) {
     };
   };
   class TestDate extends Date {
-    constructor(...args) { super(...(args.length ? args : ['2026-11-24T11:00:00Z'])); }
-    static now() { return Date.parse('2026-11-24T11:00:00Z'); }
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return Date.parse(now); }
   }
   const context = vm.createContext({
     Intl: instrumentedIntl, Date: TestDate, Number, Math, Set, Map, WeakMap, URL, AbortController,
@@ -205,6 +205,28 @@ async function tests() {
   assert.equal(h.run("periodRain('2026-11-25','week')"), null, 'Incomplete week stays unknown');
   h.run('archive={};render()');
   assert.equal(h.nodes.get('temp').textContent, '\u2014');
+
+  // Reproduce the real failure: default noon has null rain counters while the
+  // latest station reading has valid zero/day and 2.8 mm/month counters.
+  const rainDisplay=harness(source,'2026-11-25T17:20:00Z');
+  rainDisplay.run(`archive={'2026-11':[
+    {timestamp:'2026-11-25T11:07:12Z',temperature:1,rain_rate:0,rain_day:null,rain_month:null},
+    {timestamp:'2026-11-25T17:07:12Z',temperature:.6,rain_rate:0,rain_day:0,rain_month:2.8},
+    {timestamp:'2026-11-25T17:17:12Z',temperature:.5,rain_rate:0,rain_day:0,rain_month:2.8}
+  ]};live=archive['2026-11'][2];render();`);
+  assert.equal(rainDisplay.run('chosenHour'),12);
+  assert.equal(rainDisplay.nodes.get('temp').textContent,'1.0','Temperature still uses the selected hour');
+  assert.equal(rainDisplay.nodes.get('rainday').textContent,'0,0','Current daily zero is visible');
+  assert.equal(rainDisplay.nodes.get('rainmonth').textContent,'2,8','Current month is not hidden by the noon gap');
+  assert(rainDisplay.nodes.get('rain-time').textContent.includes('18:17'),'Rain time is shown explicitly');
+  assert.equal(rainDisplay.nodes.get('history-rain-total').textContent,'0,0 mm');
+  assert(rainDisplay.nodes.get('history-rain-chart').innerHTML.includes('Erfasst: 0,0 mm'),'Observed zero is visible in the chart');
+  rainDisplay.run('selectHour(6)');rainDisplay.paint();
+  assert.equal(rainDisplay.nodes.get('rainmonth').textContent,'2,8','The temperature slider does not hide today’s rain totals');
+  rainDisplay.run("archive={};render()");
+  assert.equal(rainDisplay.nodes.get('rainmonth').textContent,'2,8','Fresh latest.json can render before its monthly archive arrives');
+  rainDisplay.run("chosenDay='2026-11-24';render()");
+  assert.equal(rainDisplay.nodes.get('rainmonth').textContent,'—','Current totals do not leak into another date');
 
   // Refresh is deduplicated and failed refreshes preserve the last known data.
   seed(h);

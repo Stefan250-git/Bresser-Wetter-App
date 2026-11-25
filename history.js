@@ -186,7 +186,7 @@ const WeatherHistory = (() => {
       return (bin.amount===null?`<text x="${xx+w/2}" y="${bottom-5}" text-anchor="middle">?</text>`:
         `<rect class="history-bar" opacity="${bin.partial ? .65 : 1}" x="${xx+1}" y="${bottom-Math.max(1,h)}" width="${w}" height="${Math.max(1,h)}"><title>${detailFormat.format(new Date(bin.start))}: ${fmt(bin.amount)} mm${bin.partial?' · unvollständig':''}</title></rect>`)+
         (model.hours===168 && bin.partial?`<text x="${xx+w/2}" y="${bottom+11}" text-anchor="middle">*</text>`:'');
-    }).join(''),'Niederschlagsmengen in Millimeter; Fragezeichen bedeuten fehlende Daten');
+    }).join('')+(model.total===0 || model.total===null?`<text class="history-rain-state" x="${(left+right)/2}" y="${(top+bottom)/2}" text-anchor="middle">${model.total===0?'Erfasst: 0,0 mm':'Keine Intervallwerte'}</text>`:''),'Niederschlagsmengen in Millimeter; Fragezeichen bedeuten fehlende Daten');
     let selected=model.end;
     function inspect(time) {
       selected=Math.max(model.start,Math.min(model.end,time));
