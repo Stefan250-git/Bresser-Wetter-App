@@ -4,7 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from datetime import datetime, timezone
-from collect import archive_item, num, stat, parse_stamp
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+from collect import archive_item, num, stat, parse_stamp, main
 
 
 class ArchiveTests(unittest.TestCase):
@@ -43,6 +45,42 @@ class ArchiveTests(unittest.TestCase):
             self.assertIsNone(stat({key: [previous, 12]}, key, midnight))
         with self.assertRaises(ValueError):
             parse_stamp('2026-11-01T12:00:00')
+
+    def test_collection_pipeline_with_realistic_mock_responses(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            current = SimpleNamespace(epoch=parse_stamp('2026-11-01T12:00:00Z').timestamp(),
+                                      temperature=-2, heat_index=None, wind_chill=-4,
+                                      rain_rate=1.2, wind_speed=2, wind_direction=180)
+            client = MagicMock()
+            client.__enter__.return_value = client
+            client.get_current_conditions.return_value = current
+            client.get_device_stats.return_value = {'rain_month_total': [current.epoch, 3]}
+            package = SimpleNamespace(WeathercloudClient=lambda **kwargs: client)
+            with patch.dict('sys.modules', weathercloud=package), patch('collect.ROOT', directory), \
+                    patch('collect.archive_item', side_effect=lambda item: archive_item(item, directory)):
+                main()
+                main()  # repeated job with same station reading
+                current.epoch += 600
+                client.get_device_stats.return_value = {'rain_month_total': [current.epoch, 3.2]}
+                main()
+            rows = json.loads((directory / '2026-11.json').read_text())
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(rows[-1]['timestamp'], '2026-11-01T12:10:00Z')
+            self.assertEqual(rows[-1]['feels'], -4)
+            self.assertEqual(rows[-1]['rain_rate'], 1.2)
+            self.assertEqual(rows[-1]['wind_speed'], 7.2)
+            self.assertIsNone(rows[-1]['rain_day'])
+
+    def test_missing_station_timestamp_does_not_create_history(self):
+        client = MagicMock()
+        client.__enter__.return_value = client
+        client.get_current_conditions.return_value = SimpleNamespace(epoch=None)
+        with patch.dict('sys.modules', weathercloud=SimpleNamespace(WeathercloudClient=lambda **kwargs: client)), \
+                patch('collect.archive_item') as write:
+            with self.assertRaises(ValueError):
+                main()
+            write.assert_not_called()
 
 
 if __name__ == '__main__':
