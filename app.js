@@ -106,7 +106,7 @@ $('hour-ruler').onpointerdown=$('hour').onpointerdown;
 $('hour-ruler').oncontextmenu=$('hour').oncontextmenu;
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){endHourPress();stopCompassSway();}
-  else { renderMoon();renderCurrentWeather();forecast();loadRiver(); }
+  else { renderMoon();renderCurrentWeather();loadRelevant(true).then(render);forecast();loadRiver(); }
 });
 $('hour').oninput = event => {
   if (hourPress) { updateHourControl();return; }
@@ -233,6 +233,7 @@ async function loadRelevant(force=false) {
   const request=++dataRequest,day=chosenDay;
   const weekDay=(new Date(day+'T12:00:00Z').getUTCDay()+6)%7,weekStart=addDay(day,-weekDay);
   const months=new Set([yearMonth(day),yearMonth(addDay(day,-1)),yearMonth(addDay(day,1)),yearMonth(weekStart),yearMonth(day.replace(/^\d{4}/,String(+day.slice(0,4)-1)))]);
+  for(const date of range(addDay(dateBerlin(),-8),dateBerlin()))months.add(yearMonth(date));
   await Promise.all([...months].map(month=>loadMonth(month,force)));
   let nextLive=null,failed=false;
   try { nextLive=await fetchJson('data/latest.json'); } catch { failed=true; }
@@ -556,9 +557,19 @@ const isToday=chosenDay===dateBerlin();
 const wind=isToday?(readingTime(live)?.day===chosenDay?live:latestForDay(chosenDay)):null;
 renderWind(wind);
 }
+let historyHours=24;
+function renderHistory(){
+  WeatherHistory.render(WeatherHistory.build([...Object.values(archive).flat(),...(live?[live]:[])],historyHours),live);
+}
+$('history-24').onclick=()=>{historyHours=24;renderHistory();};
+$('history-168').onclick=()=>{historyHours=168;renderHistory();};
+if(typeof ResizeObserver==='function'){
+  let historyWidth=0;
+  new ResizeObserver(entries=>{const width=Math.round(entries[0].contentRect.width);if(width!==historyWidth){historyWidth=width;renderHistory();}}).observe($('history-temperature-chart'));
+}
 function render(){
   if (hourRenderFrame !== null) { cancelAnimationFrame(hourRenderFrame);hourRenderFrame=null; }
-  updateHourControl();renderCurrent();renderSelection();
+  updateHourControl();renderCurrent();renderSelection();renderHistory();
 }
 let forecastPending=null;
 function forecast(){
@@ -571,4 +582,4 @@ setupCompassObserver();
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});updateHourControl();renderMoon();loadRelevant().then(render);forecast();loadRiver();
 
 // Keep the current-weather icon fresh without polling while the app is hidden.
-setInterval(()=>{if(!document.hidden){renderMoon();forecast();loadRiver();}},10*60*1000);
+setInterval(()=>{if(!document.hidden){loadRelevant(true).then(render);renderMoon();forecast();loadRiver();}},10*60*1000);

@@ -72,6 +72,12 @@ Die drei fotorealistischen Darstellungen sind KI-generierte Symbolbilder, keine 
 
 Der Trend vergleicht den aktuellen Wasserstand mit der PEGELONLINE-Messung von einer Stunde zuvor: Pfeil und Steigend/Fallend/Gleichbleibend sowie die Änderung in Zentimetern. Der Vergleich orientiert sich am Zeitstempel des aktuellen Messwerts, auch über Tages- und Zeitumstellungsgrenzen hinweg. Fehlt der Vergleichswert (maximal zwei Minuten Zeitabweichung), erscheint „Trend nicht verfügbar“. Ein Ausfall der historischen Daten blendet den aktuellen Wasserstand nicht aus.
 
+## Wetterverlauf: 24 Stunden und 7 Tage
+
+Die gemeinsame Verlaufskarte steht direkt unter der aktuellen Temperatur samt Messzeitpunkt. Sie zeigt echte Stationsmessungen, Stundenmittel in der Wochenansicht und transparent gekennzeichnete Regen-Teilsummen. Umschalten benötigt keine weiteren API-Aufrufe.
+
+Die vollständige [Umsetzungs- und Prüfdokumentation](WETTERVERLAUF.md) enthält Datenregeln, geänderte Dateien, Testergebnisse, Wiederherstellungspunkte und die nötigen Einstellungen für den optionalen automatischen Pages-Deploy. Browserprüfung: `node scripts/serve-qa.cjs`, danach `http://127.0.0.1:8765/scripts/test-browser.html` öffnen.
+
 ## Weitere Quellen
 - https://weathercloud.net/de/faq (kein offizieller Abruf-API, 10-Minuten-Intervall)
 - https://github.com/MauroDruwel/Weathercloud (inoffizieller Python-Client)
