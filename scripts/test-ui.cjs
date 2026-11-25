@@ -223,6 +223,9 @@ async function tests() {
   assert.equal(h.nodes.get('current-temp').textContent, '7,3');
   assert(h.nodes.get('status').textContent.startsWith('Abruf fehlgeschlagen'));
   assert.equal(h.run('recordsForDay("2026-11-24").length'), 24);
+  h.context.fetch=async()=>({ok:true,json:async()=>null});
+  await h.run('loadRelevant()');
+  assert.equal(h.run('live.temperature'),7.3,'Malformed latest data cannot erase the last known station reading');
 
   const monthLoad = harness();
   let finishMonth, monthFetches=0;
@@ -579,7 +582,7 @@ async function tests() {
     const asset=html.match(new RegExp(name.replace('.','\\.')+'\\?v=\\d+'))[0];
     assert(sw.includes(asset),'Service worker and HTML asset versions match');
   }
-  console.log('PASS: five-day moon timeline, DST/year boundaries, 14 USNO full-moon references, Berlin full-moon dates, moon orientation/offline support, gauges, compass, slider, navigation, weather and service worker.');
+  console.log('PASS: mobile views, native slider, current/archive separation, shared markers, freshness, updates, forecasts, gauges, compass, moon/DST/full-moon references, rain, river and cache versions.');
 }
 
 function benchmark(code) {

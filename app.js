@@ -216,7 +216,10 @@ async function loadRelevant(force=false) {
   for(const date of range(addDay(dateBerlin(),-8),dateBerlin()))months.add(yearMonth(date));
   await Promise.all([...months].map(month=>loadMonth(month,force)));
   let nextLive=null,failed=false;
-  try { nextLive=await fetchJson('data/latest.json'); } catch { failed=true; }
+  try {
+    nextLive=await fetchJson('data/latest.json');
+    if(typeof nextLive?.timestamp!=='string' || !/(?:Z|[+-]\d{2}:\d{2})$/.test(nextLive.timestamp) || !Number.isFinite(Date.parse(nextLive.timestamp)))throw Error('Ungültige Stationsmessung');
+  } catch { failed=true; }
   if (request !== dataRequest) return;
   if (!failed) live=nextLive;
   dataFailed=failed;renderStationStatus();
@@ -541,7 +544,8 @@ function renderSelection(){
 function renderCurrent(){
   renderMoon();renderCurrentWeather();renderStationStatus();
   updateTemperatureGauge('current',live?.temperature,live?.feels);
-  $('current-time').textContent=live?.timestamp?'Stationsmessung · '+readingFormatter.format(new Date(live.timestamp)):'Noch keine aktuelle Messung';
+  const currentTime=readingTime(live);
+  $('current-time').textContent=currentTime?'Stationsmessung · '+readingFormatter.format(new Date(currentTime.epoch)):'Noch keine aktuelle Messung';
   const today=dateBerlin(),reading=latestForDay(today);
   $('date').max=today;$('next').disabled=chosenDay>=today;
   const wind=readingTime(live)?.day===today?live:reading;
