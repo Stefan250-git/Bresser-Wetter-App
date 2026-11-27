@@ -117,6 +117,7 @@ function renderRiverHistory(){
 }
 $('river-24').onclick=()=>{riverHours=24;renderRiverHistory();};
 $('river-168').onclick=()=>{riverHours=168;renderRiverHistory();};
+$('river-720').onclick=()=>{riverHours=720;renderRiverHistory();};
 if(typeof ResizeObserver==='function'){
   let riverWidth=0;
   new ResizeObserver(entries=>{const width=Math.round(entries[0].contentRect.width);if(width!==riverWidth){riverWidth=width;renderRiverHistory();}}).observe($('river-chart'));
@@ -183,15 +184,17 @@ function loadRiver(force=false) {
   $('river-panel').setAttribute('aria-busy','true');
   riverPending=(async()=>{
     const controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),10000);
+    let timeout=setTimeout(()=>controller.abort(),10000);
     try {
       const response=await fetch(RIVER_URL,{cache:'no-store',signal:controller.signal});
       if(!response.ok)throw Error('HTTP '+response.status);
       riverReading=normalizeRiver(await response.json());riverFailed=false;riverFetchedAt=Date.now();
       riverTrend=null;riverMeasurements=[];
+      // The 30-day series can take longer than the current measurement.
+      clearTimeout(timeout);timeout=setTimeout(()=>controller.abort(),30000);
       // A missing history must not hide an otherwise valid current water level.
       try {
-        const target=Date.now()-168*60*60*1000;
+        const target=Date.now()-720*60*60*1000;
         const historyURL=new URL('https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/'+RIVER_UUID+'/W/measurements.json');
         historyURL.searchParams.set('start',new Date(target-2*60*1000).toISOString());
         historyURL.searchParams.set('end',new Date().toISOString());

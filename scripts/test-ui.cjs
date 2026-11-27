@@ -495,7 +495,7 @@ async function tests() {
   river.context.fetch=(url)=>{
     if(url.includes('/W/measurements.json')) {
       const query=new URL(url).searchParams;
-      assert.equal(query.get('start'),'2026-11-17T10:58:00.000Z');
+      assert.equal(query.get('start'),'2026-10-25T10:58:00.000Z');
       assert.equal(query.get('end'),'2026-11-24T11:00:00.000Z');
       return Promise.resolve({ok:true,json:async()=>[{value:402,timestamp:'2026-11-24T10:00:00+01:00'}]});
     }

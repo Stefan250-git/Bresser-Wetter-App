@@ -33,3 +33,6 @@ body{min-width:0;background:var(--paper);color:var(--ink);line-height:1.5;-webki
 
 
 @media(max-width:420px){.more-details .panel.moon-panel{padding-inline:8px;margin-inline:-10px}.panel.moon-panel .moon-day-label{white-space:nowrap;overflow-wrap:normal}}
+
+/* Three period controls, scoped to the river chart. */
+.river-history .history-switch{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;max-width:340px}.river-history .history-switch button{min-width:0;padding-inline:6px;white-space:normal}

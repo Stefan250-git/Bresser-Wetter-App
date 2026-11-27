@@ -22,16 +22,16 @@ const RiverHistory=(()=>{
     const width=Math.max(220,Math.round(chart.getBoundingClientRect().width));
     const scale=typeof getComputedStyle==='function'&&root.documentElement?Math.max(1,parseFloat(getComputedStyle(root.documentElement).fontSize)/16):1;
     const low=model.min===null?0:Math.floor(model.min-2),high=model.max===null?10:Math.ceil(model.max+2);
-    const left=Math.max(48,number.format(high).length*8.5+12)*scale,right=width-12,top=13*scale,bottom=top+123,tickY=bottom+24*scale,height=tickY+(model.hours===168?38:20)*scale;
+    const left=Math.max(48,number.format(high).length*8.5+12)*scale,right=width-12,top=13*scale,bottom=top+123,tickY=bottom+24*scale,height=tickY+(model.hours>24?38:20)*scale;
     const x=time=>left+(time-model.start)/(model.end-model.start)*(right-left),y=value=>bottom-(value-low)/(high-low)*(bottom-top);
     let content=[0,.25,.5,.75,1].map(f=>{
       const yy=bottom-f*(bottom-top);
       return `<path class="history-grid" d="M${left} ${yy}H${right}"/><text class="history-y-label" x="${left-8}" y="${yy+4}" text-anchor="end">${number.format(low+f*(high-low))}</text>`;
     }).join('');
-    const interval=(model.hours===24?6:24)*HOUR,ticks=[model.start];
+    const interval=(model.hours===24?6:model.hours===720?120:24)*HOUR,ticks=[model.start];
     for(let t=Math.ceil(model.start/interval)*interval;t<model.end;t+=interval)if(x(t)-x(ticks.at(-1))>65*scale&&right-x(t)>65*scale)ticks.push(t);
     ticks.push(model.end);
-    content+=ticks.map((t,i)=>`<text x="${x(t)}" y="${tickY}" text-anchor="${i===0?'start':i===ticks.length-1?'end':'middle'}">${model.hours===24?clock.format(t):date.format(t)}${model.hours===168?`<tspan x="${x(t)}" dy="${16*scale}">${clock.format(t)}</tspan>`:''}</text>`).join('');
+    content+=ticks.map((t,i)=>`<text x="${x(t)}" y="${tickY}" text-anchor="${i===0?'start':i===ticks.length-1?'end':'middle'}">${model.hours===24?clock.format(t):date.format(t)}${model.hours>24?`<tspan x="${x(t)}" dy="${16*scale}">${clock.format(t)}</tspan>`:''}</text>`).join('');
     const segments=[];let segment=[];
     for(const row of model.points){
       if(segment.length&&row.time-segment.at(-1).time>GAP){segments.push(segment);segment=[];}
@@ -48,7 +48,7 @@ const RiverHistory=(()=>{
     chart.innerHTML=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Pegelverlauf Wesel in Zentimetern über Pegelnull">${content}</svg>`;
     get('river-extremes').textContent=model.min===null?'Min — · Max —':'Min '+number.format(model.min)+' cm · Max '+number.format(model.max)+' cm';
     get('river-history-note').textContent=model.gap?'Historie unvollständig. Messlücken werden nicht verbunden.':'';
-    for(const hours of [24,168])get('river-'+hours).setAttribute('aria-pressed',String(model.hours===hours));
+    for(const hours of [24,168,720])get('river-'+hours).setAttribute('aria-pressed',String(model.hours===hours));
     let selected=model.points.at(-1)?.time??model.end,touch=null;
     function inspect(time){
       selected=Math.max(model.start,Math.min(model.end,time));

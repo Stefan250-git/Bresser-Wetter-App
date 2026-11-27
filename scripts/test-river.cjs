@@ -8,11 +8,20 @@ let model=river.build([...measurements,row(.5,132),row(0,null),{timestamp:'inval
 assert.equal(model.points.length,6,'Keep only valid measurements in window; deduplicate current reading');
 assert.equal(model.min,120);assert.equal(model.max,134);assert(model.gap);
 assert.equal(river.build(measurements,null,168,now).points.length,8);
+const monthly=river.build([row(721,999),row(720,90),row(400,95),...measurements],null,720,now);
+assert.equal(monthly.start,now-30*24*hour);
+assert.equal(monthly.points.length,10,'30 days includes older river readings and excludes readings outside the window');
+assert.equal(monthly.min,90);assert.equal(monthly.max,134);
 assert.equal(river.build([],null,24,now).min,null);
 assert.equal(river.build([row(24,100),row(0,100)],null,24,now).gap,true,'Large measurement gaps stay explicit');
 const nodes=new Map();
 function get(id){if(!nodes.has(id))nodes.set(id,{textContent:'',attributes:{},setAttribute(k,v){this.attributes[k]=v;},getBoundingClientRect(){return {width:280,left:0};}});return nodes.get(id);}
 const root={getElementById:get};
+river.render(monthly,root);
+assert.equal(get('river-720').attributes['aria-pressed'],'true');
+assert.equal(get('river-168').attributes['aria-pressed'],'false');
+assert(get('river-chart').innerHTML.includes('dy="16"'),'30-day dates include clock labels on a second line');
+assert(!get('river-chart').innerHTML.includes('NaN'));
 river.render(model,root);
 assert(get('river-chart').innerHTML.includes('viewBox="0 0 280'));
 assert.equal((get('river-chart').innerHTML.match(/class="river-history-line"/g)||[]).length,2,'Never connect a 23-hour gap');
@@ -40,6 +49,13 @@ context.h.run("riverReading={value:135,timestamp:new Date().toISOString(),state:
 assert.equal(context.h.nodes.get('river-trend').dataset.direction,'rising');
 context.h.nodes.get('river-168').onclick();
 assert.equal(context.h.nodes.get('river-168').attributes['aria-pressed'],'true');
+context.h.nodes.get('river-720').onclick();
+assert.equal(context.h.run('riverHours'),720);
+assert.equal(context.h.nodes.get('river-720').attributes['aria-pressed'],'true');
+assert.equal(context.h.nodes.get('river-168').attributes['aria-pressed'],'false');
+assert.equal(context.h.run('historyHours'),24,'Temperature/rain periods stay unchanged');
+context.h.nodes.get('river-24').onclick();
+assert.equal(context.h.nodes.get('river-720').attributes['aria-pressed'],'false');
 context.h.run('riverTrend=-2;renderRiver()');assert.equal(context.h.nodes.get('river-trend').dataset.direction,'falling');
 context.h.run('riverTrend=0;renderRiver()');assert.equal(context.h.nodes.get('river-trend').dataset.direction,'steady');
 context.h.run('riverFailed=true;renderRiver()');assert.equal(context.h.nodes.get('river-trend').dataset.direction,'unknown');
