@@ -111,6 +111,16 @@ function renderStationStatus(){
 const RIVER_UUID='f33c3cc9-dc4b-4b77-baa9-5a5f10704398';
 const RIVER_URL='https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/'+RIVER_UUID+'.json?includeTimeseries=true&includeCurrentMeasurement=true';
 let riverReading=null,riverFailed=false,riverPending=null,riverFetchedAt=0,riverTrend=null;
+let riverMeasurements=[],riverHours=24;
+function renderRiverHistory(){
+  if(typeof RiverHistory!=='undefined')RiverHistory.render(RiverHistory.build(riverMeasurements,riverReading,riverHours));
+}
+$('river-24').onclick=()=>{riverHours=24;renderRiverHistory();};
+$('river-168').onclick=()=>{riverHours=168;renderRiverHistory();};
+if(typeof ResizeObserver==='function'){
+  let riverWidth=0;
+  new ResizeObserver(entries=>{const width=Math.round(entries[0].contentRect.width);if(width!==riverWidth){riverWidth=width;renderRiverHistory();}}).observe($('river-chart'));
+}
 function calculateRiverTrend(reading,measurements) {
   if(!reading || !Number.isFinite(reading.value) || !Array.isArray(measurements))return null;
   const target=Date.parse(reading.timestamp)-60*60*1000;
@@ -150,6 +160,8 @@ function renderRiver() {
   $('river-trend').textContent=trend===null?'Trend nicht verfügbar':
     (trend>0?'↗ Steigend':trend<0?'↘ Fallend':'→ Gleichbleibend')+' · '+
     (trend>0?'+':'')+fmt(trend,Number.isInteger(trend)?0:1)+' cm in 1 Stunde';
+  $('river-trend').dataset.direction=trend===null?'unknown':trend>0?'rising':trend<0?'falling':'steady';
+  renderRiverHistory();
   const center=status.key==='unknown'?'normal':status.key;
   const others=['low','normal','high'].filter(key=>key!==center);
   const positions=[others[0],center,others[1]];
@@ -176,15 +188,18 @@ function loadRiver(force=false) {
       const response=await fetch(RIVER_URL,{cache:'no-store',signal:controller.signal});
       if(!response.ok)throw Error('HTTP '+response.status);
       riverReading=normalizeRiver(await response.json());riverFailed=false;riverFetchedAt=Date.now();
-      riverTrend=null;
+      riverTrend=null;riverMeasurements=[];
       // A missing history must not hide an otherwise valid current water level.
       try {
-        const target=Date.parse(riverReading.timestamp)-60*60*1000;
+        const target=Date.now()-168*60*60*1000;
         const historyURL=new URL('https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/'+RIVER_UUID+'/W/measurements.json');
         historyURL.searchParams.set('start',new Date(target-2*60*1000).toISOString());
-        historyURL.searchParams.set('end',new Date(target+2*60*1000).toISOString());
+        historyURL.searchParams.set('end',new Date().toISOString());
         const history=await fetch(historyURL.href,{cache:'no-store',signal:controller.signal});
-        if(history.ok)riverTrend=calculateRiverTrend(riverReading,await history.json());
+        if(history.ok){
+          const measurements=await history.json();
+          if(Array.isArray(measurements)){riverMeasurements=measurements;riverTrend=calculateRiverTrend(riverReading,measurements);}
+        }
       } catch { riverTrend=null; }
     } catch { riverFailed=true; }
     finally { clearTimeout(timeout);renderRiver();$('river-panel').setAttribute('aria-busy','false'); }
@@ -588,6 +603,21 @@ function forecastSymbol(code){
   if([2,3].includes(code))return ['☁','Bewölkt'];
   return ['—','Keine Wetterart verfügbar'];
 }
+
+function forecastGraphic(code){
+  const cloud='<path d="M15 43H48A10 10 0 0 0 49 23A15 15 0 0 0 21 21A11 11 0 0 0 15 43Z" fill="#d8e6f1" stroke="#7498b3" stroke-width="2"/>';
+  const sun='<g stroke="#e4a62c" stroke-width="3" stroke-linecap="round"><path d="M30 3V8M30 40V45M9 24H14M46 24H51M15 9L19 13M41 35L45 39M15 39L19 35M41 13L45 9"/><circle cx="30" cy="24" r="12" fill="#ffd466" stroke-width="2"/></g>';
+  let art;
+  if([95,96,99].includes(code))art=cloud+'<path d="M34 32L24 49H33L28 61L46 41H36L42 32Z" fill="#f2b947" stroke="#d99529"/>';
+  else if(snowCodes.has(code))art='<path d="M32 10V54M13 21L51 43M13 43L51 21M26 15L32 21L38 15M26 49L32 43L38 49M14 28L23 27L21 18M43 46L41 37L50 36M21 46L23 37L14 36M50 28L41 27L43 18" fill="none" stroke="#67add8" stroke-width="2.5" stroke-linecap="round"/>';
+  else if(rainCodes.has(code))art='<path d="M8 29a24 24 0 0 1 48 0c-4-5-8-5-12 0-4-5-8-5-12 0-4-5-8-5-12 0-4-5-8-5-12 0Z" fill="#72b8e6" stroke="#287eb5" stroke-width="2.5" stroke-linejoin="round"/><path d="M32 6V3m0 26v23a6 6 0 0 0 12 0" fill="none" stroke="#287eb5" stroke-width="3" stroke-linecap="round"/>';
+  else if([45,48].includes(code))art=cloud+'<path d="M10 48H52M17 55H57M7 61H44" stroke="#91aabf" stroke-width="3" stroke-linecap="round"/>';
+  else if([0,1].includes(code))art=sun;
+  else if(code===2)art=sun+'<g transform="translate(0 6)">'+cloud+'</g>';
+  else if(code===3)art=cloud;
+  else art=cloud+'<text x="32" y="37" text-anchor="middle" fill="#526f87" font-family="system-ui,sans-serif" font-size="22" font-weight="700">?</text>';
+  return '<svg viewBox="0 0 64 64" width="44" height="44" aria-hidden="true" focusable="false">'+art+'</svg>';
+}
 function renderForecast(data){
   const d=data?.daily;
   if(!d?.time || d.time.length<4)throw Error('Unvollständige Prognose');
@@ -597,8 +627,8 @@ function renderForecast(data){
     const date=new Date(d.time[i]+'T12:00:00Z'),card=document.createElement('article');card.className='forecast-day';
     const heading=document.createElement('h3');heading.textContent=i===1?'Morgen':forecastDayFormatter.format(date);
     const day=document.createElement('span');day.className='forecast-date';day.textContent=forecastDateFormatter.format(date);
-    const symbol=document.createElement('span');symbol.className='forecast-symbol';const [icon,label]=forecastSymbol(d.weather_code?.[i]);
-    symbol.textContent=icon+'\uFE0E';symbol.setAttribute('role','img');symbol.setAttribute('aria-label',label);
+    const symbol=document.createElement('span');symbol.className='forecast-symbol';const [,label]=forecastSymbol(d.weather_code?.[i]);
+    symbol.innerHTML=forecastGraphic(d.weather_code?.[i]);symbol.setAttribute('role','img');symbol.setAttribute('aria-label',label);
     const temperature=document.createElement('div');temperature.className='forecast-temperature';temperature.textContent=fmt(d.temperature_2m_max[i],0)+'°';
     const minimum=document.createElement('small');minimum.textContent=' / '+fmt(d.temperature_2m_min[i],0)+'°';temperature.append(minimum);
     temperature.setAttribute('aria-label','Höchstwert '+fmt(d.temperature_2m_max[i])+' Grad, Tiefstwert '+fmt(d.temperature_2m_min[i])+' Grad');

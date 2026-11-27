@@ -1,0 +1,49 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const river=require('../river.js');
+const now=Date.parse('2026-11-27T11:00:00Z'),hour=3600000;
+const row=(ago,value)=>({timestamp:new Date(now-ago*hour).toISOString(),value});
+const measurements=[row(168,100),row(48,110),row(24,120),row(1,130),row(.75,131),row(.5,132),row(.25,133),row(0,134)];
+let model=river.build([...measurements,row(.5,132),row(0,null),{timestamp:'invalid',value:42},row(-1,999)],row(0,134),24,now);
+assert.equal(model.points.length,6,'Keep only valid measurements in window; deduplicate current reading');
+assert.equal(model.min,120);assert.equal(model.max,134);assert(model.gap);
+assert.equal(river.build(measurements,null,168,now).points.length,8);
+assert.equal(river.build([],null,24,now).min,null);
+assert.equal(river.build([row(24,100),row(0,100)],null,24,now).gap,true,'Large measurement gaps stay explicit');
+const nodes=new Map();
+function get(id){if(!nodes.has(id))nodes.set(id,{textContent:'',attributes:{},setAttribute(k,v){this.attributes[k]=v;},getBoundingClientRect(){return {width:280,left:0};}});return nodes.get(id);}
+const root={getElementById:get};
+river.render(model,root);
+assert(get('river-chart').innerHTML.includes('viewBox="0 0 280'));
+assert.equal((get('river-chart').innerHTML.match(/class="river-history-line"/g)||[]).length,2,'Never connect a 23-hour gap');
+assert.equal(get('river-24').attributes['aria-pressed'],'true');
+assert(get('river-inspection').textContent.includes('134 cm'));
+get('river-chart').onkeydown({key:'ArrowLeft',preventDefault(){}});
+assert(get('river-inspection').textContent.includes('133 cm'),'Keyboard selects previous actual reading');
+get('river-chart').onkeydown({key:'Home',preventDefault(){}});
+assert(get('river-inspection').textContent.includes('120 cm'));
+get('river-chart').onpointerdown({pointerId:1,clientX:150,clientY:0});
+assert(get('river-inspection').textContent.includes('Keine Messung'),'Gaps have no interpolated measurement');
+model=river.build([],null,24,now);river.render(model,root);
+assert(get('river-chart').innerHTML.includes('Keine Verlaufsmessungen'));
+assert(!get('river-chart').innerHTML.includes('NaN'));
+river.render(river.build([row(0,123)],null,24,now),root);
+assert(get('river-chart').innerHTML.includes('r="2.7"'),'A single measurement stays visible');
+// Run the actual app, including its river module, with the existing DOM harness.
+const uiFile=path.join(__dirname,'test-ui.cjs'),{createRequire}=require('node:module');
+const setup=fs.readFileSync(uiFile,'utf8').split('async function tests()')[0];
+const context=vm.createContext({require:createRequire(uiFile),__dirname,URL,AbortController});
+vm.runInContext(setup+';globalThis.h=harness();',context);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../river.js'),'utf8'),context.h.context);
+for(const id of ['river-cursor','river-selected-point'])context.h.nodes.set(id,get(id));
+context.h.run("riverReading={value:135,timestamp:new Date().toISOString(),state:'normal'};riverTrend=3;renderRiver()");
+assert.equal(context.h.nodes.get('river-trend').dataset.direction,'rising');
+context.h.nodes.get('river-168').onclick();
+assert.equal(context.h.nodes.get('river-168').attributes['aria-pressed'],'true');
+context.h.run('riverTrend=-2;renderRiver()');assert.equal(context.h.nodes.get('river-trend').dataset.direction,'falling');
+context.h.run('riverTrend=0;renderRiver()');assert.equal(context.h.nodes.get('river-trend').dataset.direction,'steady');
+context.h.run('riverFailed=true;renderRiver()');assert.equal(context.h.nodes.get('river-trend').dataset.direction,'unknown');
+for(const code of [0,1,2,3,45,48,51,61,71,95,999]){
+  const svg=context.h.run('forecastGraphic('+code+')');assert(svg.startsWith('<svg'));assert(!svg.includes('undefined'));
+}
+console.log('PASS: river windows, extrema, gaps, missing/duplicate/invalid values, responsive SVG, keyboard/pointer selection, app integration, trend directions and vector forecast icons.');

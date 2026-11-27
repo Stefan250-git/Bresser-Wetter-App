@@ -14,3 +14,22 @@ body{min-width:0;background:var(--paper);color:var(--ink);line-height:1.5;-webki
 .history-chart text{font-size:.625rem}.history-chart .history-y-label{font-size:.875rem}.history-chart .history-rain-state{font-size:.75rem}
 .history-temperature{stroke:#c9611b}.history-point-temperature{fill:#c9611b}.history-selected-point{stroke:#c9611b}
 @media(prefers-color-scheme:dark){.history-temperature{stroke:#f5a55a}.history-point-temperature{fill:#f5a55a}.history-selected-point{stroke:#f5a55a}}
+
+/* Shared across iOS and Android, independent of the device color scheme. */
+.panel.moon-panel{color-scheme:dark;color:#eef5ff;border-color:#294766;background-color:#07162e;background-image:radial-gradient(ellipse at 50% 35%,#183759 0%,#08182f 65%,#050e22 100%)}
+.panel.moon-panel .section-title,.panel.moon-panel .moon-phase-name,.panel.moon-panel .moon-current-percent{color:#f2f6ff}
+.panel.moon-panel .moon-day-label,.panel.moon-panel .moon-next-full{color:#d3e1f3;font-size:.875rem;line-height:1.5}
+.panel.moon-panel .moon-day-current .moon-day-label{color:#fff;font-size:1rem;font-weight:750}
+.panel.moon-panel .moon-phase-name{font-size:1.0625rem}.panel.moon-panel .moon-current-percent{font-size:1.875rem}
+.moon-day-graphic svg{overflow:visible}.moon-day-graphic{filter:drop-shadow(0 0 5px #b8d5ff35)}
+.river-trend{display:flex;align-items:center;gap:12px;border:1px solid #a7cce0;border-radius:14px;background:#e6f3fa;color:#174f73;padding:14px;font-size:clamp(1.125rem,4.5vw,1.5rem);font-weight:750;line-height:1.5}
+.river-trend:before{content:"";display:block;flex:0 0 38px;width:38px;height:38px;background:center/contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M6 20h28m-11-11 11 11-11 11' fill='none' stroke='%23174f73' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+.river-trend[data-direction="rising"]:before{transform:rotate(-45deg)}.river-trend[data-direction="falling"]:before{transform:rotate(45deg)}.river-trend[data-direction="unknown"]:before{display:none}
+.river-history{margin-top:22px;padding-top:18px;border-top:1px solid #dce5ec;min-width:0}.river-history .section-title{margin:0}.river-history-line{fill:none;stroke:#287eb5;stroke-width:2;stroke-linejoin:round}.river-history-area{fill:#438fcb;opacity:.18}.river-history-point{fill:#287eb5}.river-history-selected{fill:#fff;stroke:#287eb5;stroke-width:2.5}
+.forecast-symbol svg{display:block;width:44px;height:44px;margin:auto;overflow:visible}.forecast-symbol{color:#287eb5}
+@media(prefers-color-scheme:dark){.river-trend{color:#d8efff;background:#15364b;border-color:#47788d}.river-trend:before{filter:brightness(0) invert(1)}.river-history{border-color:#31475c}.river-history-line,.river-history-selected{stroke:#8dcfff}.river-history-point{fill:#8dcfff}.river-history-selected{fill:#15364b}}
+@media(max-width:420px){.moon-timeline{grid-template-columns:repeat(2,minmax(0,1fr)) minmax(90px,1.8fr) repeat(2,minmax(0,1fr));column-gap:3px}.river-history .history-heading{align-items:flex-start;flex-direction:column}.river-history .history-switch{align-self:flex-end}.river-trend{padding:12px;gap:8px}.river-trend:before{flex-basis:32px;width:32px;height:32px}}
+
+
+
+@media(max-width:420px){.more-details .panel.moon-panel{padding-inline:8px;margin-inline:-10px}.panel.moon-panel .moon-day-label{white-space:nowrap;overflow-wrap:normal}}
