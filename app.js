@@ -580,7 +580,12 @@ function renderCurrent(){
   $('rain-time').textContent=reading?'Stand: '+readingFormatter.format(new Date(reading.timestamp)):'Keine heutige Stationsmessung';
   $('compare').textContent=rainComparison(today,reading);
   $('now-rain').textContent=fmt(reading?.rain_day);
-  $('now-wind').textContent=fmt(wind?.wind_speed);
+  const currentWind=Number.isFinite(live?.wind_speed)&&live.wind_speed>=0?live.wind_speed:null;
+  const windNames=['Nord','Nordost','Ost','Südost','Süd','Südwest','West','Nordwest'];
+  const windDegrees=Number.isFinite(live?.wind_direction)?(live.wind_direction%360+360)%360:null;
+  const windName=currentWind===null?'—':currentWind<1?'Windstill':windDegrees===null?'—':windNames[Math.round(windDegrees/45)%8];
+  $('now-wind').textContent=fmt(currentWind);
+  $('now-wind-direction').textContent='· '+windName;
 }
 let historyHours=24;
 function renderHistory(){

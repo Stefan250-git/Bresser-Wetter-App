@@ -112,6 +112,23 @@ async function tests() {
   assert(stationView.nodes.get('status').textContent.includes('10 Min.'));
   assert.equal(stationView.nodes.get('wind').textContent,'12,0','Archive selection never hides current wind');
   assert.equal(stationView.nodes.get('rainmonth').textContent,'2,8');
+  assert.equal(stationView.nodes.get('now-wind').textContent,'12,0');
+  assert.equal(stationView.nodes.get('now-wind-direction').textContent,'· Süd');
+  for(const [degrees,name] of [[0,'Nord'],[45,'Nordost'],[90,'Ost'],[135,'Südost'],[180,'Süd'],[225,'Südwest'],[270,'West'],[315,'Nordwest'],[360,'Nord'],[-90,'West']]){
+    stationView.context.windDegrees=degrees;stationView.run('live={...live,wind_direction:windDegrees};renderCurrent()');
+    assert.equal(stationView.nodes.get('now-wind-direction').textContent,'· '+name);
+  }
+  stationView.run('live={...live,wind_speed:2.3,wind_direction:null};renderCurrent()');
+  assert.equal(stationView.nodes.get('now-wind').textContent,'2,3');
+  assert.equal(stationView.nodes.get('now-wind-direction').textContent,'· —');
+  stationView.run('live={...live,wind_speed:0,wind_direction:180};renderCurrent()');
+  assert.equal(stationView.nodes.get('now-wind-direction').textContent,'· Windstill');
+  stationView.run("live={...live,timestamp:'2026-11-24T11:00:00Z',wind_speed:3.2,wind_direction:180};renderCurrent()");
+  assert.equal(stationView.nodes.get('now-wind').textContent,'3,2','Summary wind belongs to the same measurement as the temperature, including stale snapshots');
+  assert.equal(stationView.nodes.get('now-wind-direction').textContent,'· Süd');
+  stationView.run('live={...live,wind_speed:null};renderCurrent()');
+  assert.equal(stationView.nodes.get('now-wind').textContent,'—');
+  assert.equal(stationView.nodes.get('now-wind-direction').textContent,'· —');
   stationView.context.navigator={onLine:false};stationView.run('renderStationStatus()');
   assert(stationView.nodes.get('status').textContent.startsWith('Offline'));
   stationView.context.navigator.onLine=true;stationView.run("live={...live,timestamp:'2026-11-25T16:00:00Z'};renderStationStatus()");
