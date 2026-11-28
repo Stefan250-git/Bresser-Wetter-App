@@ -1,15 +1,15 @@
 
-const CACHE = 'bresser-v37';
+const CACHE = 'bresser-v38';
 const DATA_CACHE = 'bresser-data-v1';
 
 const STATIC = [
   './',
   './index.html',
-  './styles.css?v=37',
-  './mobile.css?v=37',
-  './app.js?v=37',
-  './history.js?v=37',
-  './river.js?v=37',
+  './styles.css?v=38',
+  './mobile.css?v=38',
+  './app.js?v=38',
+  './history.js?v=38',
+  './river.js?v=38',
   './icon.svg',
   './assets/apple-touch-icon.png',
   './assets/icon-192.png',
@@ -67,7 +67,8 @@ self.addEventListener('fetch', event => {
     event.respondWith(stationResponse(event.request));return;
   }
   if (url.hostname.includes('open-meteo.com') ||
-      url.hostname.endsWith('pegelonline.wsv.de')) return;
+      url.hostname.endsWith('pegelonline.wsv.de') ||
+      url.hostname==='www.youtube-nocookie.com') return;
 
   event.respondWith(
     fetch(event.request)

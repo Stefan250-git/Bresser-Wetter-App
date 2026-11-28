@@ -452,7 +452,7 @@ async function tests() {
     river.run('riverReading=normalizeRiver(gauge);riverFailed=false;renderRiver()');
     assert.equal(river.nodes.get('river-value').textContent,'405');
     assert.equal(river.nodes.get('river-state').textContent,label);
-    assert.equal(river.nodes.get('river-'+state).style['--river-column'],'2','The current water-level picture always occupies the center');
+    assert.equal(river.nodes.get('river-'+state).style['--river-column'],String(['low','normal','high'].indexOf(state)+1),'Water-level labels retain their low / normal / high order');
     assert.equal(river.nodes.get('river-'+state).dataset.position,'center');
     for(const key of ['low','normal','high'])assert.equal(river.nodes.get('river-'+key).dataset.current,String(key===state));
   }

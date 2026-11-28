@@ -28,6 +28,7 @@ async function test(){
   await assert.rejects(request('https://example.org/weather/data/missing.json'),/No offline station data/,'No invented zero if uncached');
   assert.equal(request('https://api.open-meteo.com/v1/forecast'),undefined,'External model requests remain independent');
   assert.equal(request('https://www.pegelonline.wsv.de/webservice/test'),undefined);
+  assert.equal(request('https://www.youtube-nocookie.com/embed/gF4Cle4U9_w?playsinline=1'),undefined,'Live video stays outside the app cache');
   console.log('PASS: PWA assets, explicit updates, preserved data cache, network-first snapshots, offline provenance and missing-data handling.');
 }
 test().catch(error=>{console.error(error);process.exitCode=1;});
