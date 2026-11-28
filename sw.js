@@ -1,15 +1,15 @@
 
-const CACHE = 'bresser-v38';
+const CACHE = 'bresser-v39';
 const DATA_CACHE = 'bresser-data-v1';
 
 const STATIC = [
   './',
   './index.html',
-  './styles.css?v=38',
-  './mobile.css?v=38',
-  './app.js?v=38',
-  './history.js?v=38',
-  './river.js?v=38',
+  './styles.css?v=39',
+  './mobile.css?v=39',
+  './app.js?v=39',
+  './history.js?v=39',
+  './river.js?v=39',
   './icon.svg',
   './assets/apple-touch-icon.png',
   './assets/icon-192.png',

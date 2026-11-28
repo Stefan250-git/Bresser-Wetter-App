@@ -23,6 +23,7 @@ function harness(code = source, now = '2026-11-24T11:00:00Z') {
     append(...children) { this.children.push(...children); },
     appendChild(child) { this.children.push(child); },
     setAttribute(key, value) { this.attributes[key] = value; },
+    getAttribute(key) { return this.attributes[key]??null; },
     getBoundingClientRect() { return {left:0,top:0,width:296,height:80}; },
     focus() {},
     setPointerCapture(id) { this.captures.add(id); },
@@ -87,6 +88,10 @@ function seed(h) {
 }
 
 async function tests() {
+  const stream=harness(),frame=stream.nodes.get('river-livestream');
+  frame.setAttribute('src','https://www.youtube-nocookie.com/embed/gF4Cle4U9_w?autoplay=1&mute=1&controls=0');
+  stream.run('restartRiverStream()');assert.equal(frame.src,frame.attributes.src,'Reopening restarts the muted live embed');
+  frame.src='paused';stream.run("switchView('today')");assert.equal(frame.src,frame.attributes.src,'Returning to main view restarts the stream');
   const direct=harness();seed(direct);
   const slider=direct.nodes.get('hour');
   slider.oninput({target:{value:'18'}});

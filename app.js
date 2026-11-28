@@ -63,15 +63,25 @@ function switchView(view){
   $('view-today').hidden=view!=='today';$('view-archive').hidden=view!=='archive';
   $('nav-today').setAttribute('aria-pressed',String(view==='today'));
   $('nav-archive').setAttribute('aria-pressed',String(view==='archive'));
-  if(view==='today')renderHistory();else renderSelection();
+  if(view==='today'){renderHistory();restartRiverStream();}else renderSelection();
   if(typeof window!=='undefined')window.scrollTo({top:0,behavior:'instant'});
 }
 $('nav-today').onclick=()=>switchView('today');
 $('nav-archive').onclick=()=>switchView('archive');
 $('archive-today').onclick=()=>{if(chosenDay!==dateBerlin())changeDate(dateBerlin());else renderSelection();};
+// Reload the muted player at the live edge when the app is reopened/refreshed.
+function restartRiverStream(){
+  const frame=$('river-livestream');
+  if(frame)frame.src=frame.getAttribute('src');
+}
+const riverStream=$('river-livestream');
+if(riverStream && typeof riverStream.closest==='function'){
+  const details=riverStream.closest('details');
+  if(details)details.addEventListener('toggle',()=>{if(details.open)restartRiverStream();});
+}
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){endHourPress();stopCompassSway();}
-  else { renderMoon();renderCurrentWeather();loadRelevant(true).then(render);forecast();loadRiver();checkForAppUpdate(); }
+  else { restartRiverStream();renderMoon();renderCurrentWeather();loadRelevant(true).then(render);forecast();loadRiver();checkForAppUpdate(); }
 });
 function changeDate(v) {
   if (!v || v > dateBerlin() || v === chosenDay) return;
@@ -83,6 +93,7 @@ function changeDate(v) {
 $('prev').onclick=()=>changeDate(addDay(chosenDay,-1));$('next').onclick=()=>changeDate(addDay(chosenDay,1));$('date').onchange=e=>changeDate(e.target.value);
 $('refresh').onclick = async () => {
   if ($('refresh').disabled) return;
+  restartRiverStream();
   $('refresh').disabled=true;$('refresh').setAttribute('aria-busy','true');
   try { checkForAppUpdate();await Promise.all([loadRelevant(true),forecast(),loadRiver(true)]);render(); }
   finally { $('refresh').disabled=false;$('refresh').setAttribute('aria-busy','false'); }
